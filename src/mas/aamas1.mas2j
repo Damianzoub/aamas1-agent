@@ -1,0 +1,5 @@
+MAS aamas1{
+    infrastructure: Centralized
+    environment: env.GridEnv
+    agents: painter_agent
+}
