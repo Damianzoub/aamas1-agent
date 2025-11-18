@@ -1,4 +1,4 @@
-
+// not sure yet if this will work
 +!goto(X,Y)
 : position(X,y) <- true 
 

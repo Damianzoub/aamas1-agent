@@ -18,7 +18,6 @@ object(cd).
 
 
 //entry point
-!.start.
 
 -	B: Brush
 -	K: Key
