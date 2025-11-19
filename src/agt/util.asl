@@ -33,3 +33,16 @@ carrying_count(N) & N > 0
 
 //add rewards and penalties
 
+
+
+//compatible
+compatible(B).
+compatible(Cl).
+compatible(K).
+compatible(Cd).
+compatible(T).
+compatible(Ch).
+compatible(D).
+
+//incompatible 
+incompatible(O) :- not compatible(O) & carrying(O).
