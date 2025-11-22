@@ -1,7 +1,7 @@
-package env;
 
+import jason.asSyntax.ASSyntax;
+import jason.asSyntax.Structure;
 import jason.environment.Environment;
-import jason.asSyntax.*;
 
 public class GridEnv extends Environment{
     @Override

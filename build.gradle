@@ -1,0 +1,31 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'io.github.jason-lang:jason-interpreter:3.3.0'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/env']
+        }
+        resources {
+            srcDirs = ['src/agt']
+        }
+    }
+}
+
+tasks.register('runMas',JavaExec){
+    group = 'application'
+    description = 'Run Jason MAS'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass.set('jason.infra.local.RunLocalMAS')
+    args = ['src/mas/aamas1.mas2j']
+    standardInput = System.in
+}
