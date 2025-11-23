@@ -3,7 +3,7 @@
 This project implements a **BDI intelligent agent** using the **Jason agent-oriented programming language**, designed for the environment and scenario described in the assignment.  
 The agent operates in a grid world, performs reasoning, selects goals, plans actions, interacts with objects, and aims to satisfy the final objective efficiently.
 
-The environment and task description are based on the official exercise sheet. :contentReference[oaicite:1]{index=1}
+The environment and task description are based on the official exercise sheet.:contentReference[oaicite:1]{index=1}
 
 ---
 
