@@ -22,6 +22,14 @@ position(3,5).
 has_key(false).
 enemy(necro).
 ```
+**Python Analogy**
+```python
+beliefs = {
+    "position": (3, 5),
+    "has_key": False,
+    "enemy": "necro"
+}
+```
 
 ### 1.2 Goals
 Two types of goals are used in Jason:
@@ -30,11 +38,20 @@ Two types of goals are used in Jason:
   ```asl
   !go_to(5,6)
   ```
+  **Python Analogy**
+  ```python
+  def achieve_go_to(x, y):
+    go_to(x, y)
+  ```
 - **Test Goals**
   The agent queries its belief base.
 
   ```asl
   ?position(X,Y)
+  ```
+  **Python Analogy**
+  ```python
+  x, y = beliefs.get("position")
   ```
 
 ## 2. Plans
@@ -42,6 +59,11 @@ A plan tells the agent **when** to act and **how** to act.
 General structure.
 ```asl
 +trigger : context <- body.
+```
+**Python Analogy**
+```python
+if trigger_happens and context_is_true:
+    run_body()
 ```
 
 ### 2.1 Triggers
@@ -51,21 +73,37 @@ Common triggers:
 - -b - belief removed
 - +!g - an achievement goal is posted
 - +?g - test goal is posted
+
   **Example**
   ```asl
   +!go_to(X,Y)
   ```
+  **Python Analogy**
+```python
+def on_goal_go_to(x, y):
+    handle_go_to(x, y)
+```
 
 ### 2.2 context
 A condition that must be true for the plan to run.
 ```asl
 : not blocked(X,Y)
 ```
+**Python Analogy**
+```python
+if not blocked(x, y):
+    execute_plan()
+```
 
 ### 2.3 Body
 A sequence of actions, subgoals, or belief updates.
 ```asl
 <- move_to(X,Y); !update_position.
+```
+**Python Analogy**
+```python
+move_to(x, y)
+achieve_update_position()
 ```
 
 ## 3. Important Syntax (Cheat Sheet)
@@ -92,6 +130,11 @@ ASL Example:
 ```asl
 +!move_to(X,Y) <- move(X,Y).
 ```
+**Python Analogy**
+```python
+def on_goal_move_to(x, y):
+    environment.move(x, y)
+```
 Java Exmaple:
 ```java
 public boolean executeAction(String ag, Structure action, ...) {
@@ -99,6 +142,12 @@ public boolean executeAction(String ag, Structure action, ...) {
         // action code here
     }
 }
+```
+**Python Env Example**
+```python
+def execute_action(agent, action, *args):
+    if action == "move":
+        pass
 ```
 
 ## 5. Inter-Agent Communication
