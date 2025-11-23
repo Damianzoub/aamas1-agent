@@ -7,7 +7,8 @@ repositories {
 }
 
 dependencies {
-    implementation 'io.github.jason-lang:jason-interpreter:3.3.0'
+    implementation 'io.github.jason-lang:jason-interpreter:3.3.0' // to get the Jason Intepreter
+    implementation 'org.jgrapht:jgrapht-core:1.5.2' // to get JGraphT library for A*
 }
 
 sourceSets {
