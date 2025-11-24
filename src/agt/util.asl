@@ -3,6 +3,7 @@ capacity(3).
 //current number of objects the agents has 
 carrying_count(0).
 
+//not sure for the below code 
 //increase the number of objects the agent is carrying by 1
 +!inc_carry:
 carrying_count(N) & capacity(Max) & N < Max
