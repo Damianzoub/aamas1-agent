@@ -29,9 +29,9 @@ at(Cl,5,5).  // Color
 
 //Initial locations of T, Ch, D (static version)
 //Later, to make the system dynamic, these will come from percepts
-at(Ch,2,2).   //Chair
-at(D,1,1).    //Door
-at(T,2,1).    //Table
+at(Ch,4,2).   //Chair
+at(D,3,1).    //Door
+at(T,5,1).    //Table
 
 //Walls location
 wall(2,2).
