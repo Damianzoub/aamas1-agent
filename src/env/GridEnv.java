@@ -253,6 +253,51 @@ public class GridEnv extends Environment {
             }
             return out;
         }
+        enum GoalType{
+            OPEN_DOOR_ONLY,
+            PAINT_FURNITURE_ONLY,
+            PAINT_AND_OPEN
+        }
+        
+        GoalType goal = GoalType.PAINT_AND_OPEN;
+        
+        boolean isCompatible(String item){
+            switch (goal){
+                case OPEN_DOOR_ONLY:
+                    return item.equals("key") || item.equals("code");
+                case PAINT_FURNITURE_ONLY:
+                    return item.equals("brush") || item.equals("color");
+                case PAINT_AND_OPEN:
+                    return item.equals("brush") || item.equals("color")
+                            || item.equals("key") || item.equals("code");
+            }
+            return false;
+        }
+
+        //Reward R(s)
+        double carryingReward(){
+            int carried = 0;
+            int compatible = 0;
+            int incompatible =0;
+
+            if (hasBrush){
+                carried++;
+                if (isCompatible("brush")) compatible++; else incompatible++;
+            }
+            if (hasKey){
+                carried++;
+                if (isCompatible("key")) compatible++; else incompatible++;
+            }
+            if (hasCode){
+                carried++;
+                if (isCompatible("code")) compatible++; else incompatible++;
+            }
+            if (carried==0){
+                return -0.01;
+            }else{
+                return compatible*(-0.02) + incompatible*(-0.03);
+            }
+        }
 
         // helper to remove all instances of a mask
         void removeAllMaskInstances(int mask) {

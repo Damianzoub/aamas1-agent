@@ -81,8 +81,9 @@ public class Experiment{
                     break;
                 }
             }
-
-            episodeReturn+=reward;
+            episodeReturn += reward;
+            double carryingReward = model.carryingReward();
+            episodeReturn+=carryingReward;
         }
         return episodeReturn;
     }
