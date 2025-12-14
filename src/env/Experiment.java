@@ -1,5 +1,5 @@
+package env;
 import java.util.Random;
-
 import jason.environment.grid.Location;
 public class Experiment{
     private static final int NUM_EPISODES =100;

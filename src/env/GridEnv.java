@@ -1,3 +1,4 @@
+package env;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
@@ -385,9 +386,16 @@ public class GridEnv extends Environment {
      */
     class GridView extends GridWorldView {
 
+        // declare local cell size and font so they are always defined
+        private final int cellSizeLocal;
+        private final Font defaultFontLocal;
+
         public GridView(GridModel model) {
             super(model, "GridEnv", 500);
-            defaultFont = new Font("Arial", Font.BOLD, 14);
+            // size passed to super() is 500 — compute a cell size from that value
+            int viewSize = 500;
+            this.cellSizeLocal = Math.max(8, viewSize / Math.max(WIDTH, HEIGHT)); // avoid zero/too small
+            this.defaultFontLocal = new Font("Arial", Font.BOLD, 14);
             setVisible(true);
             repaint();
         }
@@ -399,26 +407,26 @@ public class GridEnv extends Environment {
                     super.drawObstacle(g, x, y);
                     break;
                 case BRUSH:
-                    g.setColor(Color.MAGENTA); g.fillRect(x+6, y+6, cellSize-12, cellSize-12); break;
+                    g.setColor(Color.MAGENTA); g.fillRect(x+6, y+6, cellSizeLocal-12, cellSizeLocal-12); break;
                 case KEY:
-                    g.setColor(Color.ORANGE); g.fillOval(x+6, y+6, cellSize-12, cellSize-12); break;
+                    g.setColor(Color.ORANGE); g.fillOval(x+6, y+6, cellSizeLocal-12, cellSizeLocal-12); break;
                 case CODE:
-                    g.setColor(Color.CYAN); g.fillRect(x+8, y+8, cellSize-16, cellSize-16); break;
+                    g.setColor(Color.CYAN); g.fillRect(x+8, y+8, cellSizeLocal-16, cellSizeLocal-16); break;
                 case DOOR:
-                    g.setColor(Color.DARK_GRAY); g.fillRect(x+2, y+2, cellSize-4, cellSize-4); break;
+                    g.setColor(Color.DARK_GRAY); g.fillRect(x+2, y+2, cellSizeLocal-4, cellSizeLocal-4); break;
                 case CHAIR:
-                    g.setColor(Color.LIGHT_GRAY); g.fillRect(x+4, y+6, cellSize-8, cellSize-8); break;
+                    g.setColor(Color.LIGHT_GRAY); g.fillRect(x+4, y+6, cellSizeLocal-8, cellSizeLocal-8); break;
                 case COLOR:
-                    g.setColor(Color.PINK); g.fillOval(x+6, y+6, cellSize-12, cellSize-12); break;
+                    g.setColor(Color.PINK); g.fillOval(x+6, y+6, cellSizeLocal-12, cellSizeLocal-12); break;
                 case TABLE:
-                    g.setColor(Color.YELLOW); g.fillRect(x+4, y+4, cellSize-8, cellSize-8); break;
+                    g.setColor(Color.YELLOW); g.fillRect(x+4, y+4, cellSizeLocal-8, cellSizeLocal-8); break;
             }
         }
 
         @Override
         public void drawAgent(Graphics g, int x, int y, Color c, int id) {
-            super.drawAgent(g, x, y, Color.BLUE, id);
-            drawString(g, x, y, defaultFont, "A");
+            super.drawAgent(g, x, y, Color.RED, id);
+            drawString(g, x, y, defaultFontLocal, "A");
         }
     }
 }
