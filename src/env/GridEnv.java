@@ -33,14 +33,15 @@ public class GridEnv extends Environment {
     public static final int HEIGHT = 5;
 
     // Bitmask objects (powers of two)
-    public static final int OBST  = 1;
-    public static final int BRUSH = 2;     // B
-    public static final int KEY   = 4;     // K
-    public static final int CODE  = 8;     // Cd
-    public static final int DOOR  = 16;    // D
-    public static final int CHAIR = 32;    // Ch
-    public static final int COLOR = 64;    // Cl
-    public static final int TABLE = 128;   // T
+    public static final int OBST  = 1 << 2;
+
+    public static final int BRUSH = 1 << 8;   // 256
+    public static final int KEY   = 1 << 9;   // 512
+    public static final int CODE  = 1 << 10;  // 1024
+    public static final int DOOR  = 1 << 11;  // 2048
+    public static final int CHAIR = 1 << 12;  // 4096
+    public static final int COLOR = 1 << 13;  // 8192
+    public static final int TABLE = 1 << 6;  // 16384
 
     private GridModel model;
     private GridView view;
@@ -434,47 +435,22 @@ public class GridEnv extends Environment {
 
         @Override
         public void draw(Graphics g, int x, int y, int object) {
-            switch (object) {
-
-                case OBST:
-                    // ONLY walls are colored
-                    int s = this.cellSizeLocal;
-                    g.setColor(Color.BLACK);
-                    g.fillRect(x + 2, y + 2, cellSizeLocal - 2, cellSizeLocal - 2);
-                    break;
-
-                case BRUSH:
-                    label(g, x, y, "B");
-                    break;
-
-                case KEY:
-                    label(g, x, y, "K");
-                    break;
-
-                case CODE:
-                    label(g, x, y, "Cd");
-                    break;
-
-                case COLOR:
-                    label(g, x, y, "Cl");
-                    break;
-
-                case DOOR:
-                    label(g, x, y, "D");
-                    break;
-
-                case CHAIR:
-                    label(g, x, y, "Ch");
-                    break;
-
-                case TABLE:
-                    label(g, x, y, "T");
-                    break;
-
-                default:
-                    super.draw(g, x, y, object);
+            super.draw(g,x,y,object);
+            if ((object & OBST) != 0) {
+                g.setColor(Color.BLACK);
+                g.fillRect(x + 2, y + 2, cellSizeLocal - 2, cellSizeLocal - 2);
+                return;
             }
+
+            if ((object & BRUSH) != 0) label(g, x, y, "B");
+            if ((object & KEY)   != 0) label(g, x, y, "K");
+            if ((object & CODE)  != 0) label(g, x, y, "Cd");
+            if ((object & COLOR) != 0) label(g, x, y, "Cl");
+            if ((object & DOOR)  != 0) label(g, x, y, "D");
+            if ((object & CHAIR) != 0) label(g, x, y, "Ch");
+            if ((object & TABLE) != 0) label(g, x, y, "T");
         }
+
 
 
         @Override
