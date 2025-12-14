@@ -12,7 +12,7 @@ public class Experiment{
             GridEnv env = new GridEnv();
             GridEnv.GridModel model = env.new GridModel();
 
-            model.randomizeObjects();
+            model.resetToPdfLayout();
             double episodeReturn = runSingleEpisode(model);
             System.out.println("Episode "+ep+ " return = " +episodeReturn);
             totalReward += episodeReturn;
@@ -58,7 +58,7 @@ public class Experiment{
                 case 1:{
                     String[] objs = {"brush","key","code"};
                     String obj = objs[rng.nextInt(objs.length)];
-                    boolean ok = model.pickObjectAtAgent(obj);
+                    boolean ok = model.pickAtAgent(obj);
                     reward = ok ? -0.02 : -0.03;
                     break;
                 }
