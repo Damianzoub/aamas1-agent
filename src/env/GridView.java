@@ -13,7 +13,7 @@ public class GridView extends GridWorldView {
 
     private final int cellSizeLocal;
     private final Font defaultFontLocal;
-
+    private Runnable onRunOneEpisode = null;
     private Runnable onStartExperiment = null;
     private Runnable onReset = null;
 
@@ -27,22 +27,24 @@ public class GridView extends GridWorldView {
         // Simple control panel
         Panel p = new Panel();
         Button startExp = new Button("Start Experiment (100)");
+        Button oneEp = new Button("Run 1 Episode");
         Button reset    = new Button("Reset");
 
         startExp.addActionListener(e -> { if (onStartExperiment != null) onStartExperiment.run(); });
         reset.addActionListener(e -> { if (onReset != null) onReset.run(); });
-
+        oneEp.addActionListener(e->{if (onRunOneEpisode != null) onRunOneEpisode.run();});
         p.add(startExp);
         p.add(reset);
-
+        p.add(oneEp);
         add(p, BorderLayout.SOUTH);
 
         setVisible(true);
     }
 
-    public void setEnvHooks(Runnable startExperiment, Runnable reset) {
+    public void setEnvHooks(Runnable startExperiment, Runnable reset,Runnable runOneEpisode) {
         this.onStartExperiment = startExperiment;
         this.onReset = reset;
+        this.onRunOneEpisode = runOneEpisode;
     }
 
     public void updateFromModel(GridEnv.GridModel model) {
