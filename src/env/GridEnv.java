@@ -31,7 +31,7 @@ public class GridEnv extends Environment {
 
     private GridModel model;
     private GridView view;
-
+    public static final String AG_NAME = "main_agent";
 
     // ===== Experiment bookkeeping (for GUI + optional agent control) =====
     private boolean experimentMode = false;
@@ -51,8 +51,8 @@ public class GridEnv extends Environment {
         view = new GridView(model);
         view.setEnvHooks(
                 () -> startExperiment(100),
-                () -> startExperiment(1),
-                () -> resetEpisode()
+                () -> resetEpisode(),
+                () -> startExperiment(1)
         );
 
         updatePercepts();
@@ -182,7 +182,7 @@ public class GridEnv extends Environment {
 
             if (countedStep) stepCounter++;
             updatePercepts();
-            addPercept(ASSyntax.createLiteral("reward(" + reward + ")"));
+            addPercept(AG_NAME,ASSyntax.createLiteral("reward(" + reward + ")"));
             
             if (view != null) view.updateFromModel(model);
 
@@ -204,50 +204,59 @@ public class GridEnv extends Environment {
             p = new Location(model.ix(1),model.iy(1));
         }
         // pos(X,Y)
-        addPercept(ASSyntax.createLiteral(
-                "pos(" + model.px(p.x) + "," + model.py(p.y) + ")"
+        addPercept(AG_NAME,ASSyntax.createLiteral(
+               "pos(" + model.px(p.x) + "," + model.py(p.y) + ")"
         ));
 
         // objects: at(Symbol,X,Y)
-        addObjectPerceptIfPresent(BRUSH, "B");
-        addObjectPerceptIfPresent(KEY,   "K");
-        addObjectPerceptIfPresent(CODE,  "Cd");
-        addObjectPerceptIfPresent(COLOR, "Cl");
-        addObjectPerceptIfPresent(TABLE, "T");
-        addObjectPerceptIfPresent(CHAIR, "Ch");
-        addObjectPerceptIfPresent(DOOR,  "D");
+        addObjectPerceptIfPresent(BRUSH, "b");
+        addObjectPerceptIfPresent(KEY,   "k");
+        addObjectPerceptIfPresent(CODE,  "cd");
+        addObjectPerceptIfPresent(COLOR, "cl");
+        addObjectPerceptIfPresent(TABLE, "t");
+        addObjectPerceptIfPresent(CHAIR, "ch");
+        addObjectPerceptIfPresent(DOOR,  "d");
+
 
         // inventory: provide BOTH has/1 and have/1 so your old plans won’t break
-        if (model.hasBrush) { addPercept( ASSyntax.createLiteral("has(B)"));  addPercept(ASSyntax.createLiteral("have(B)")); }
-        if (model.hasKey)   { addPercept( ASSyntax.createLiteral("has(K)"));  addPercept(ASSyntax.createLiteral("have(K)")); }
-        if (model.hasCode)  { addPercept( ASSyntax.createLiteral("has(Cd)")); addPercept(ASSyntax.createLiteral("have(Cd)")); }
-        if (model.hasColor) { addPercept( ASSyntax.createLiteral("has(Cl)")); addPercept(ASSyntax.createLiteral("have(Cl)")); }
+        if (model.hasBrush) addPercept(AG_NAME, ASSyntax.createLiteral("have(b)"));
+        if (model.hasKey)   addPercept(AG_NAME, ASSyntax.createLiteral("have(k)"));
+        if (model.hasCode)  addPercept(AG_NAME, ASSyntax.createLiteral("have(cd)"));
+        if (model.hasColor) addPercept(AG_NAME, ASSyntax.createLiteral("have(cl)"));
+
 
         // capacity percepts (your ASL uses these)
-        addPercept( ASSyntax.createLiteral("max_carry(" + GridModel.MAX_CARRY + ")"));
-        addPercept( ASSyntax.createLiteral("carrying_count(" + model.carriedCount() + ")"));
+        addPercept( AG_NAME,ASSyntax.createLiteral("max_carry(" + GridModel.MAX_CARRY + ")"));
+        addPercept( AG_NAME,ASSyntax.createLiteral("carrying_count(" + model.carriedCount() + ")"));
 
         // status
-        addPercept( ASSyntax.createLiteral(model.tableColored ? "colored(table)" : "not_colored(table)"));
-        addPercept( ASSyntax.createLiteral(model.chairColored ? "colored(chair)" : "not_colored(chair)"));
-        addPercept( ASSyntax.createLiteral(model.doorOpen ? "door(open)" : "door(closed)"));
-
+        if (model.tableColored){
+            addPercept(AG_NAME, ASSyntax.createLiteral("colored(table)"));
+        }
+        if (model.chairColored){
+            addPercept(AG_NAME, ASSyntax.createLiteral("colored(chair)"));
+        }
+        if (model.doorOpen){
+            addPercept(AG_NAME, ASSyntax.createLiteral("door(open)"));
+        }else{
+            addPercept(AG_NAME, ASSyntax.createLiteral("door(closed)"));
+        }
         // walls
         for (Location l : model.getOccupiedLocationsWithMask(OBST)) {
-            addPercept(ASSyntax.createLiteral(
+            addPercept(AG_NAME,ASSyntax.createLiteral(
                     "wall(" + model.px(l.x) + "," + model.py(l.y) + ")"
             ));
         }
 
         // episode/step/experiment
-        addPercept( ASSyntax.createLiteral("episode(" + episode + ")"));
-        addPercept( ASSyntax.createLiteral("step(" + stepCounter + ")"));
-        if (experimentMode) addPercept(ASSyntax.createLiteral("experiment(running)"));
+        addPercept(AG_NAME, ASSyntax.createLiteral("episode(" + episode + ")"));
+        addPercept(AG_NAME, ASSyntax.createLiteral("step(" + stepCounter + ")"));
+        if (experimentMode) addPercept(AG_NAME,ASSyntax.createLiteral("experiment(running)"));
     }
 
     private void addObjectPerceptIfPresent(int mask, String sym) {
         for (Location l : model.getOccupiedLocationsWithMask(mask)) {
-            addPercept( ASSyntax.createLiteral(
+            addPercept(AG_NAME, ASSyntax.createLiteral(
                     "at(" + sym + "," + model.px(l.x) + "," + model.py(l.y) + ")"
             ));
         }
@@ -258,7 +267,10 @@ public class GridEnv extends Environment {
     }
 
     // ===================== Experiment controls =====================
-
+    private void runOneEpisode(){
+        experimentMode = false;
+        resetEpisode();
+    }
     private void startExperiment(int episodes) {
         experimentMode = true;
         maxEpisodes = episodes;
@@ -429,10 +441,10 @@ public class GridEnv extends Environment {
         }
 
         private int tokenToMask(String tok) {
-            if (tok.equalsIgnoreCase("B")  || tok.equalsIgnoreCase("brush")) return BRUSH;
-            if (tok.equalsIgnoreCase("K")  || tok.equalsIgnoreCase("key"))   return KEY;
-            if (tok.equalsIgnoreCase("Cd") || tok.equalsIgnoreCase("code"))  return CODE;
-            if (tok.equalsIgnoreCase("Cl") || tok.equalsIgnoreCase("color")) return COLOR;
+            if (tok.equalsIgnoreCase("b")  || tok.equalsIgnoreCase("brush")) return BRUSH;
+            if (tok.equalsIgnoreCase("k")  || tok.equalsIgnoreCase("key"))   return KEY;
+            if (tok.equalsIgnoreCase("cd") || tok.equalsIgnoreCase("code"))  return CODE;
+            if (tok.equalsIgnoreCase("cl") || tok.equalsIgnoreCase("color")) return COLOR;
             return 0;
         }
 

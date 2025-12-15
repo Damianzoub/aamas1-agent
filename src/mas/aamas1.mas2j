@@ -1,8 +1,9 @@
 MAS aamas1 {
   infrastructure: Centralised
   environment: env.GridEnv
+  executionControl: jason.control.ExecutionControlGUI
 
-  agents:  main_agent ;
+  agents:  main_agent;
 
     
 }
