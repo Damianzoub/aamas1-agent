@@ -42,7 +42,7 @@ public class GridEnv extends Environment {
     public static final int CHAIR = 1 << 12;  // 4096
     public static final int COLOR = 1 << 13;  // 8192
     public static final int TABLE = 1 << 6;  // 16384
-
+    public static GridModel CURRENT_MODEL;
     private GridModel model;
     private GridView view;
 
@@ -51,6 +51,7 @@ public class GridEnv extends Environment {
     @Override
     public void init(String[] args) {
         model = new GridModel();
+        CURRENT_MODEL = model;
         model.resetToPdfLayout();
         view  = new GridView(model);
         model.setView(view);
@@ -68,20 +69,65 @@ public class GridEnv extends Environment {
                 reward = -0.01;
             }
 
+            else if (fun.equals("move") && action.getArity() == 1) {
+                String dir = stripQuotes(action.getTerm(0).toString()); // up/down/left/right
+            
+                Location a = model.getAgPos(0);
+                int nx = a.x, ny = a.y;
+            
+                if (dir.equalsIgnoreCase("up"))         ny -= 1;   // internal coords: up = y-1
+                else if (dir.equalsIgnoreCase("down"))  ny += 1;   // down = y+1
+                else if (dir.equalsIgnoreCase("left"))  nx -= 1;
+                else if (dir.equalsIgnoreCase("right")) nx += 1;
+                else {
+                    reward = -0.03; // unknown direction
+                }
+            
+                if (reward == 0.0) { // direction was valid
+                    if (model.canMoveAgentTo(nx, ny)) {
+                        model.setAgPos(0, nx, ny);
+                        reward = -0.02;
+                    } else {
+                        reward = -0.03;
+                    }
+                }
+            }
+            
+
             else if (fun.equals("move") && action.getArity() == 2) {
                 int X = (int)((NumberTerm)action.getTerm(0)).solve(); // PDF coords
                 int Y = (int)((NumberTerm)action.getTerm(1)).solve();
-
-                int x = model.ix(X);
-                int y = model.iy(Y);
-
-                if (model.canMoveAgentTo(x, y)) {
-                    model.setAgPos(0, x, y);
-                    reward = -0.02;
-                } else {
+            
+                int gx = model.ix(X);
+                int gy = model.iy(Y);
+            
+                Location start = model.getAgPos(0);
+            
+                // build blocked[][] in internal coords (y first!)
+                boolean[][] blocked = model.blockedGrid();
+            
+                List<PathFinding.Cell> path = PathFinding.findPath(start.x, start.y, gx, gy, blocked);
+            
+                // If goal is a wall, A* must fail immediately
+                if (blocked[gy][gx]) {
                     reward = -0.03;
+                } else {
+                    List<PathFinding.Cell> aStarPath = PathFinding.findPath(start.x, start.y, gx, gy, blocked);
+
+
+                    if (!path.isEmpty()) {
+                        if (path.size() >= 2) {
+                            PathFinding.Cell next = path.get(1);
+                            model.setAgPos(0, next.x, next.y);
+                        }
+                        reward = -0.02;
+                    } else {
+                        reward = -0.03;
+                    }
                 }
+
             }
+            
 
             else if (fun.equals("pick") && action.getArity() == 1) {
                 String tok = stripQuotes(action.getTerm(0).toString()); // accepts B/K/Cd/Cl or brush/key/code/color
@@ -241,7 +287,15 @@ public class GridEnv extends Environment {
          // (5,1)
         }
          
-        
+        boolean[][] blockedGrid() {
+            boolean[][] blocked = new boolean[HEIGHT][WIDTH];
+            for (int y = 0; y < HEIGHT; y++) {
+                for (int x = 0; x < WIDTH; x++) {
+                    blocked[y][x] = hasObject(OBST, new Location(x,y));
+                }
+            }
+            return blocked;
+        }        
 
         private void clearAllObjects() {
             // Remove all masks everywhere (GridWorldModel has no "clear everything", so do per cell)
@@ -460,4 +514,3 @@ public class GridEnv extends Environment {
         }
     }
 }
-

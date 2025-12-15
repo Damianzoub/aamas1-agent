@@ -1,4 +1,5 @@
 //goal of agent
++!goals_loaded <- .print("### GOALS.ASL LOADED ###").
 
 !mission.
 

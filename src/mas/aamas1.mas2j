@@ -1,6 +1,8 @@
 MAS aamas1 {
-    environment: env.GridEnv
-    agents:
-        main_agent;
-    aslSourcePath:   "src/agt" ;
+  infrastructure: Centralised
+  environment: env.GridEnv
+
+  agents:  main_agent ;
+
+    
 }

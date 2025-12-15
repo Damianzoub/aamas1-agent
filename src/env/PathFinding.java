@@ -1,3 +1,4 @@
+package env;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -119,6 +120,10 @@ public class PathFinding {
                 }
             }
         }
+        if (startX < 0 || startX >= cols || startY < 0 || startY >= rows) return Collections.emptyList();
+        if (goalX  < 0 || goalX  >= cols || goalY  < 0 || goalY  >= rows) return Collections.emptyList();
+
+        if (blocked[startY][startX] || blocked[goalY][goalX]) return Collections.emptyList();
 
         // Get start and goal cells from the cells array
         Cell start = cells[startY][startX];

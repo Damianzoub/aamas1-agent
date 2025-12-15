@@ -1,6 +1,5 @@
 //Navigation goals for the agent
 
-
 //Optional high-level move goals (shortcut wrappers)
 +!move_up    <- do(move(up)).
 +!move_down  <- do(move(down)).
@@ -14,12 +13,15 @@
 +!go_to(X,Y) : pos(X,Y) <- true.
 
 //Not there yet -> ask environment to plan a path, then follow that path step by step
-+!go_to(X,Y) : pos(CX,CY) <- !plan_path(CX,CY,X,Y,Path); 
-                             !follow_path(Path).
++!go_to(X,Y) : pos(CX,CY) <-
+    .print("GO_TO from ",CX,",",CY," to ",X,",",Y);
+    .plan_path(CX,CY,X,Y,Path);
+    .print("PATH = ", Path);
+    !follow_path(Path).
 
 // Follow a path represented as a list of steps
 
 +!follow_path([]) <- true.
 
-+!follow_path([Step | Rest]) <- do_step(Step); 
++!follow_path([Dir | Rest]) <- do(move(Dir)); 
                                 !follow_path(Rest).
