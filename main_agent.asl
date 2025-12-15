@@ -89,15 +89,13 @@ wall(4,5).
 //Goal: go_to(X,Y)
 //Use path planning (A*) from the current position to (X,Y)
 
-//Already at target position -> nothing to do
-+!go_to(X,Y) : pos(X,Y) <- true.
 
 //Not there yet -> ask environment to plan a path, then follow that path step by step
-+!go_to(X,Y) : pos(CX,CY) <-
-    .print("GO_TO from ",CX,",",CY," to ",X,",",Y);
-    .plan_path(CX,CY,X,Y,Path);
-    .print("PATH = ", Path);
-    !follow_path(Path).
++!go_to(X,Y) : pos(CX,CY) & CX==X & CY==Y <- true.
+
++!go_to(X,Y) : pos(CX,CY) & (CX \== X | CY \== Y) <-
+    do(move(X,Y));
+    !go_to(X,Y).
 
 // Follow a path represented as a list of steps
 
@@ -123,7 +121,7 @@ do(paint(O)).
                                   & pos(X,Y)
                                   & carrying_count(N)
                                   & max_carry(Max)
-                                  & N < Max <- do(grab(O));
+                                  & N < Max <- do(pick(O));
                                                +have(O);
                                                -at(O,X,Y).
 
