@@ -1,7 +1,9 @@
-//Βeliefs of agent
 
-//Basic world info
-pos(1,1).             //agent starting position
+
++!start <-  .print("Agent Starting...");
+            !mission.
+!start.
+
 grid_size(5,5).       //5x5 grid
 max_carry(3).          //agent can carry up to 3 objects
 
@@ -43,17 +45,18 @@ wall(4,5).
 //goal of agent
 +!goals_loaded <- .print("### GOALS.ASL LOADED ###").
 
-!mission.
 
-+!mission <- !achieve_colored(T);
+
++!mission <- .print("### MISSION STARTED ###");
+             !achieve_colored(T);
              !achieve_colored(Ch);
-             !achieve_open(D).
+             !achieve_open(D);
+             .print("### MISSION ACCOMPLISHED ###").
 
 //If Obj is already colored, do nothing
-+!achieve_colored(Obj): colored(Obj) <- true.
++!achieve_colored(T) : colored(table) <- true.
++!achieve_colored(T) : not_colored(table) <- !paint(T).
 
-//If Obj is not colored yet, paint it
-+!achieve_colored(Obj): not colored(Obj) <- !paint(Obj).
 
 //Goal: paint(Obj)
 +!paint(Obj)
@@ -65,10 +68,9 @@ wall(4,5).
 
 //Goal: achieve_open(D)
 //If the door is already open, do nothing
-+!achieve_open(D) : opened(D) <- true.  
++!achieve_open(_) : door(open) <- true.
++!achieve_open(D) : door(closed) <- !open(D).
 
-//If the door is not open yet, call open(D)
-+!achieve_open(D) : not opened(D) <- !open(D).
 
 //Goal: open(D)
 +!open(D)
@@ -105,16 +107,6 @@ wall(4,5).
                                 !follow_path(Rest).
 
 
-//Low-level actions (Java environment)
-do(move(up)).
-do(move(down)).
-do(move(left)).
-do(move(right)).
-
-do(grab(O)).
-do(drop(O)).
-do(open(D)).
-do(paint(O)).
 
 //Collect a single object O
 +!collect_object(O) : not have(O) & at(O,X,Y)

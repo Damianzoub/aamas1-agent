@@ -1,8 +1,5 @@
 package env;
 
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.Graphics;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,52 +8,54 @@ import jason.asSyntax.NumberTerm;
 import jason.asSyntax.Structure;
 import jason.environment.Environment;
 import jason.environment.grid.GridWorldModel;
-import jason.environment.grid.GridWorldView;
 import jason.environment.grid.Location;
 
-/**
- * Grid environment for one agent (5x5) - FIXED layout based on the PDF + your beliefs.asl.
- *
- * IMPORTANT: Agent beliefs/actions use PDF coordinates:
- *   - 1-based
- *   - origin at bottom-left
- *
- * Jason internal model uses:
- *   - 0-based
- *   - origin at top-left
- *
- * So we flip Y when converting.
- */
 public class GridEnv extends Environment {
 
     public static final int WIDTH  = 5;
     public static final int HEIGHT = 5;
 
-    // Bitmask objects (powers of two)
+    // Bitmask objects
     public static final int OBST  = 1 << 2;
 
-    public static final int BRUSH = 1 << 8;   // 256
-    public static final int KEY   = 1 << 9;   // 512
-    public static final int CODE  = 1 << 10;  // 1024
-    public static final int DOOR  = 1 << 11;  // 2048
-    public static final int CHAIR = 1 << 12;  // 4096
-    public static final int COLOR = 1 << 13;  // 8192
-    public static final int TABLE = 1 << 6;  // 16384
+    public static final int BRUSH = 1 << 8;   // B
+    public static final int KEY   = 1 << 9;   // K
+    public static final int CODE  = 1 << 10;  // Cd
+    public static final int DOOR  = 1 << 11;  // D
+    public static final int CHAIR = 1 << 12;  // Ch
+    public static final int COLOR = 1 << 13;  // Cl
+    public static final int TABLE = 1 << 6;   // T
+
+    // so .plan_path can access the current model
     public static GridModel CURRENT_MODEL;
+
     private GridModel model;
     private GridView view;
 
     private final String AG_NAME = "main_agent";
 
+    // ===== Experiment bookkeeping (for GUI + optional agent control) =====
+    private boolean experimentMode = false;
+    private int episode = 0;
+    private int stepCounter = 0;
+    private double totalUtility = 0.0;
+    private int maxEpisodes = 100;
+
     @Override
     public void init(String[] args) {
         model = new GridModel();
         CURRENT_MODEL = model;
+
         model.resetToPdfLayout();
-        view  = new GridView(model);
-        model.setView(view);
-        view.repaint();
+
+        view = new GridView(model);
+        view.setEnvHooks(
+                () -> startExperiment(100),
+                () -> resetEpisode()
+        );
+
         updatePercepts();
+        if (view != null) view.updateFromModel(model);
     }
 
     @Override
@@ -65,117 +64,125 @@ public class GridEnv extends Environment {
             String fun = action.getFunctor();
             double reward = 0.0;
 
+            // count steps only when we actually execute something meaningful
+            boolean countedStep = false;
+
+            // -------- aliases to match your ASL --------
+            // grab(X) == pick(X)
+            if (fun.equals("grab")) fun = "pick";
+            // put(X)  == drop(X)
+            if (fun.equals("put"))  fun = "drop";
+
             if (fun.equals("noop")) {
                 reward = -0.01;
+                countedStep = true;
             }
 
+            // move(dir)
             else if (fun.equals("move") && action.getArity() == 1) {
-                String dir = stripQuotes(action.getTerm(0).toString()); // up/down/left/right
-            
+                String dir = stripQuotes(action.getTerm(0).toString());
+
                 Location a = model.getAgPos(0);
                 int nx = a.x, ny = a.y;
-            
-                if (dir.equalsIgnoreCase("up"))         ny -= 1;   // internal coords: up = y-1
-                else if (dir.equalsIgnoreCase("down"))  ny += 1;   // down = y+1
+
+                if (dir.equalsIgnoreCase("up"))         ny -= 1;   // internal coords
+                else if (dir.equalsIgnoreCase("down"))  ny += 1;
                 else if (dir.equalsIgnoreCase("left"))  nx -= 1;
                 else if (dir.equalsIgnoreCase("right")) nx += 1;
-                else {
-                    reward = -0.03; // unknown direction
-                }
-            
-                if (reward == 0.0) { // direction was valid
+                else reward = -0.03;
+
+                if (reward == 0.0) {
                     if (model.canMoveAgentTo(nx, ny)) {
                         model.setAgPos(0, nx, ny);
                         reward = -0.02;
-                    } else {
-                        reward = -0.03;
-                    }
+                    } else reward = -0.03;
                 }
+                countedStep = true;
             }
-            
 
+            // move(X,Y) : PDF coords -> take one A* step towards it
             else if (fun.equals("move") && action.getArity() == 2) {
                 int X = (int)((NumberTerm)action.getTerm(0)).solve(); // PDF coords
                 int Y = (int)((NumberTerm)action.getTerm(1)).solve();
-            
+
                 int gx = model.ix(X);
                 int gy = model.iy(Y);
-            
+
                 Location start = model.getAgPos(0);
-            
-                // build blocked[][] in internal coords (y first!)
                 boolean[][] blocked = model.blockedGrid();
-            
-                List<PathFinding.Cell> path = PathFinding.findPath(start.x, start.y, gx, gy, blocked);
-            
-                // If goal is a wall, A* must fail immediately
+
                 if (blocked[gy][gx]) {
                     reward = -0.03;
                 } else {
-                    List<PathFinding.Cell> aStarPath = PathFinding.findPath(start.x, start.y, gx, gy, blocked);
-
-
+                    List<PathFinding.Cell> path = PathFinding.findPath(start.x, start.y, gx, gy, blocked);
                     if (!path.isEmpty()) {
                         if (path.size() >= 2) {
                             PathFinding.Cell next = path.get(1);
                             model.setAgPos(0, next.x, next.y);
                         }
                         reward = -0.02;
-                    } else {
-                        reward = -0.03;
-                    }
+                    } else reward = -0.03;
                 }
-
+                countedStep = true;
             }
-            
 
+            // pick(X)
             else if (fun.equals("pick") && action.getArity() == 1) {
-                String tok = stripQuotes(action.getTerm(0).toString()); // accepts B/K/Cd/Cl or brush/key/code/color
+                String tok = stripQuotes(action.getTerm(0).toString());
                 boolean ok = model.pickAtAgent(tok);
                 reward = ok ? -0.02 : -0.03;
+                countedStep = true;
             }
 
+            // drop(X)
             else if (fun.equals("drop") && action.getArity() == 1) {
                 String tok = stripQuotes(action.getTerm(0).toString());
                 boolean ok = model.dropAtAgent(tok);
                 reward = ok ? -0.02 : -0.03;
+                countedStep = true;
             }
 
+            // paint(X)
             else if (fun.equals("paint") && action.getArity() == 1) {
-                String target = stripQuotes(action.getTerm(0).toString()); // accepts T/Ch or table/chair
+                String target = stripQuotes(action.getTerm(0).toString());
                 boolean ok = model.paintTarget(target);
-                if (ok) {
-                    // PDF: painting table/chair yields +1 (you can make it one-time if you want)
-                    reward = 1.0;
-                } else {
-                    reward = -0.03;
-                }
+                reward = ok ? 1.0 : -0.03;
+                countedStep = true;
             }
 
+            // open(door)
             else if (fun.equals("open") && action.getArity() == 1) {
-                String tok = stripQuotes(action.getTerm(0).toString()); // accepts D/door
-                boolean ok = tok.equalsIgnoreCase("D") || tok.equalsIgnoreCase("door")
-                        ? model.openDoor()
-                        : false;
+                String tok = stripQuotes(action.getTerm(0).toString());
+                boolean ok = (tok.equalsIgnoreCase("D") || tok.equalsIgnoreCase("door")) && model.openDoor();
                 reward = ok ? 0.8 : -0.03;
+                countedStep = true;
             }
 
+            // reset
             else if (fun.equals("reset") && action.getArity() == 0) {
-                model.resetToPdfLayout();
+                resetEpisode();
+                reward = -0.01;
+            }
+
+            // next_episode (optional if you want your agent to run many episodes)
+            else if (fun.equals("next_episode") && action.getArity() == 0) {
+                finishEpisodeAndMaybeContinue();
                 reward = -0.01;
             }
 
             else {
                 reward = -0.03;
+                countedStep = true;
             }
 
-            // Add state reward R(s) for carrying items (PDF style)
+            // state reward
             reward += model.carryingReward();
+
+            if (countedStep) stepCounter++;
 
             addPercept(AG_NAME, ASSyntax.createLiteral("reward(" + reward + ")"));
             updatePercepts();
-
-            try { Thread.sleep(80); } catch (Exception ignored) {}
+            if (view != null) view.updateFromModel(model);
 
             informAgsEnvironmentChanged();
 
@@ -185,19 +192,19 @@ public class GridEnv extends Environment {
         return true;
     }
 
-    // ------------------ Percepts (BOTTOM-LEFT PDF COORDS) ------------------
+    // ===================== Percepts (PDF coords, matching your ASL) =====================
 
     void updatePercepts() {
         clearPercepts();
 
         Location p = model.getAgPos(0);
 
-        // pos(X,Y) in PDF coordinates
+        // pos(X,Y)
         addPercept(AG_NAME, ASSyntax.createLiteral(
                 "pos(" + model.px(p.x) + "," + model.py(p.y) + ")"
         ));
 
-        // at(Symbol,X,Y) in PDF coordinates (symbols like your beliefs.asl)
+        // objects: at(Symbol,X,Y)
         addObjectPerceptIfPresent(BRUSH, "B");
         addObjectPerceptIfPresent(KEY,   "K");
         addObjectPerceptIfPresent(CODE,  "Cd");
@@ -206,23 +213,32 @@ public class GridEnv extends Environment {
         addObjectPerceptIfPresent(CHAIR, "Ch");
         addObjectPerceptIfPresent(DOOR,  "D");
 
-        // inventory percepts using your symbols
-        if (model.hasBrush) addPercept(AG_NAME, ASSyntax.createLiteral("has(B)"));
-        if (model.hasKey)   addPercept(AG_NAME, ASSyntax.createLiteral("has(K)"));
-        if (model.hasCode)  addPercept(AG_NAME, ASSyntax.createLiteral("has(Cd)"));
-        if (model.hasColor) addPercept(AG_NAME, ASSyntax.createLiteral("has(Cl)"));
+        // inventory: provide BOTH has/1 and have/1 so your old plans won’t break
+        if (model.hasBrush) { addPercept(AG_NAME, ASSyntax.createLiteral("has(B)"));  addPercept(AG_NAME, ASSyntax.createLiteral("have(B)")); }
+        if (model.hasKey)   { addPercept(AG_NAME, ASSyntax.createLiteral("has(K)"));  addPercept(AG_NAME, ASSyntax.createLiteral("have(K)")); }
+        if (model.hasCode)  { addPercept(AG_NAME, ASSyntax.createLiteral("has(Cd)")); addPercept(AG_NAME, ASSyntax.createLiteral("have(Cd)")); }
+        if (model.hasColor) { addPercept(AG_NAME, ASSyntax.createLiteral("has(Cl)")); addPercept(AG_NAME, ASSyntax.createLiteral("have(Cl)")); }
 
-        // status (keep your names)
+        // capacity percepts (your ASL uses these)
+        addPercept(AG_NAME, ASSyntax.createLiteral("max_carry(" + GridModel.MAX_CARRY + ")"));
+        addPercept(AG_NAME, ASSyntax.createLiteral("carrying_count(" + model.carriedCount() + ")"));
+
+        // status
         addPercept(AG_NAME, ASSyntax.createLiteral(model.tableColored ? "colored(table)" : "not_colored(table)"));
         addPercept(AG_NAME, ASSyntax.createLiteral(model.chairColored ? "colored(chair)" : "not_colored(chair)"));
         addPercept(AG_NAME, ASSyntax.createLiteral(model.doorOpen ? "door(open)" : "door(closed)"));
 
-        // walls (use wall/2 as in your beliefs.asl)
+        // walls
         for (Location l : model.getOccupiedLocationsWithMask(OBST)) {
             addPercept(AG_NAME, ASSyntax.createLiteral(
                     "wall(" + model.px(l.x) + "," + model.py(l.y) + ")"
             ));
         }
+
+        // episode/step/experiment
+        addPercept(AG_NAME, ASSyntax.createLiteral("episode(" + episode + ")"));
+        addPercept(AG_NAME, ASSyntax.createLiteral("step(" + stepCounter + ")"));
+        if (experimentMode) addPercept(AG_NAME, ASSyntax.createLiteral("experiment(running)"));
     }
 
     private void addObjectPerceptIfPresent(int mask, String sym) {
@@ -237,11 +253,48 @@ public class GridEnv extends Environment {
         return s.replace("\"", "");
     }
 
-    // ------------------ Model ------------------
+    // ===================== Experiment controls =====================
 
-    class GridModel extends GridWorldModel {
+    private void startExperiment(int episodes) {
+        experimentMode = true;
+        maxEpisodes = episodes;
+        totalUtility = 0.0;
+        episode = 0;
+        resetEpisode();
+    }
 
-        // inventory (PDF max_carry=3)
+    private void resetEpisode() {
+        model.resetToPdfLayout();
+        stepCounter = 0;
+        updatePercepts();
+        if (view != null) view.updateFromModel(model);
+        informAgsEnvironmentChanged();
+    }
+
+    private void finishEpisodeAndMaybeContinue() {
+        int goalsAchieved = 0;
+        if (model.tableColored) goalsAchieved++;
+        if (model.chairColored) goalsAchieved++;
+        if (model.doorOpen) goalsAchieved++;
+
+        double utility = (100.0 * goalsAchieved) - stepCounter;
+        totalUtility += utility;
+
+        episode++;
+
+        if (experimentMode && episode >= maxEpisodes) {
+            System.out.println(">>> EXPERIMENT COMPLETE <<<");
+            System.out.println("Average Utility (" + maxEpisodes + " episodes): " + (totalUtility / maxEpisodes));
+            experimentMode = false;
+        }
+
+        resetEpisode();
+    }
+
+    // ===================== Model =====================
+
+    public class GridModel extends GridWorldModel {
+
         static final int MAX_CARRY = 3;
 
         boolean hasBrush = false;
@@ -253,40 +306,42 @@ public class GridEnv extends Environment {
         boolean chairColored = false;
         boolean doorOpen     = false;
 
-        GridModel() {
+        public GridModel() {
             super(WIDTH, HEIGHT, 1);
         }
 
-        // PDF (1-based, bottom-left) → Jason (0-based, top-left)
+        // PDF (1-based, bottom-left) -> internal (0-based, top-left)
         int ix(int X) { return X - 1; }
         int iy(int Y) { return HEIGHT - Y; }
 
-        // Jason → PDF
+        // internal -> PDF
         int px(int x) { return x + 1; }
         int py(int y) { return HEIGHT - y; }
 
         void resetToPdfLayout() {
-            
-                clearAllObjects();
-                setAgPos(0, ix(1), iy(1)); // agent at PDF (1,1)
-                
-                // Walls at PDF coordinates (2,1), (2,2), (4,4), (4,5)
-                add(OBST, ix(2), iy(1)); // (2,1)
-                add(OBST, ix(2), iy(2)); // (2,2)
-                add(OBST, ix(4), iy(4)); // (4,4)
-                add(OBST, ix(4), iy(5)); // (4,5)
-             
-                // Objects at their PDF coordinates
-                add(BRUSH, ix(1), iy(5));  // (1,5)
-                add(KEY,   ix(1), iy(4));  // (1,4)
-                add(CODE,  ix(3), iy(5));  // (3,5)
-                add(COLOR, ix(5), iy(5));  // (5,5)
-                add(CHAIR, ix(4), iy(2));  // (4,2)
-                add(DOOR,  ix(3), iy(1));  // (3,1)
-                add(TABLE, ix(5), iy(1));  // (5,1)
-         // (5,1)
+            clearAllObjects();
+
+            try { setAgPos(0, ix(1), iy(1)); } catch (Exception e) { e.printStackTrace(); }
+
+            // walls (PDF): (2,1), (2,2), (4,4), (4,5)
+            add(OBST, ix(2), iy(1));
+            add(OBST, ix(2), iy(2));
+            add(OBST, ix(4), iy(4));
+            add(OBST, ix(4), iy(5));
+
+            // objects (fixed positions)
+            add(BRUSH, ix(1), iy(5));
+            add(KEY,   ix(1), iy(4));
+            add(CODE,  ix(3), iy(5));
+            add(COLOR, ix(5), iy(5));
+            add(CHAIR, ix(4), iy(2));
+            add(DOOR,  ix(3), iy(1));
+            add(TABLE, ix(5), iy(1));
+
+            hasBrush = hasKey = hasCode = hasColor = false;
+            tableColored = chairColored = doorOpen = false;
         }
-         
+
         boolean[][] blockedGrid() {
             boolean[][] blocked = new boolean[HEIGHT][WIDTH];
             for (int y = 0; y < HEIGHT; y++) {
@@ -295,19 +350,17 @@ public class GridEnv extends Environment {
                 }
             }
             return blocked;
-        }        
+        }
 
         private void clearAllObjects() {
-            // Remove all masks everywhere (GridWorldModel has no "clear everything", so do per cell)
             for (int x = 0; x < getWidth(); x++) {
                 for (int y = 0; y < getHeight(); y++) {
                     Location l = new Location(x, y);
-                    // remove everything we might have placed
-                    remove(OBST, l);
+                    remove(OBST,  l);
                     remove(BRUSH, l);
-                    remove(KEY, l);
-                    remove(CODE, l);
-                    remove(DOOR, l);
+                    remove(KEY,   l);
+                    remove(CODE,  l);
+                    remove(DOOR,  l);
                     remove(CHAIR, l);
                     remove(COLOR, l);
                     remove(TABLE, l);
@@ -328,11 +381,10 @@ public class GridEnv extends Environment {
 
         boolean canMoveAgentTo(int x, int y) {
             if (x < 0 || y < 0 || x >= getWidth() || y >= getHeight()) return false;
-            Location l = new Location(x, y);
-            return !hasObject(OBST, l);
+            return !hasObject(OBST, new Location(x, y));
         }
 
-        private int carriedCount() {
+        int carriedCount() {
             int c = 0;
             if (hasBrush) c++;
             if (hasKey)   c++;
@@ -341,7 +393,6 @@ public class GridEnv extends Environment {
             return c;
         }
 
-        // Accepts: B/K/Cd/Cl or brush/key/code/color
         boolean pickAtAgent(String tok) {
             if (carriedCount() >= MAX_CARRY) return false;
 
@@ -363,33 +414,21 @@ public class GridEnv extends Environment {
             if (mask == 0) return false;
 
             if (!getInventory(mask)) return false;
-
-            // don’t drop on walls; also avoid stacking
             if (hasObject(OBST, a)) return false;
-            if (hasAnyPickupObject(a)) return false;
+
+            // don't stack pickup items
+            if (hasObject(BRUSH, a) || hasObject(KEY, a) || hasObject(CODE, a) || hasObject(COLOR, a)) return false;
 
             add(mask, a.x, a.y);
             setInventory(mask, false);
             return true;
         }
 
-        private boolean hasAnyPickupObject(Location l) {
-            return hasObject(BRUSH, l) || hasObject(KEY, l) || hasObject(CODE, l) || hasObject(COLOR, l);
-        }
-
         private int tokenToMask(String tok) {
-            // symbols
-            if (tok.equalsIgnoreCase("B"))  return BRUSH;
-            if (tok.equalsIgnoreCase("K"))  return KEY;
-            if (tok.equalsIgnoreCase("Cd")) return CODE;
-            if (tok.equalsIgnoreCase("Cl")) return COLOR;
-
-            // full names
-            if (tok.equalsIgnoreCase("brush")) return BRUSH;
-            if (tok.equalsIgnoreCase("key"))   return KEY;
-            if (tok.equalsIgnoreCase("code"))  return CODE;
-            if (tok.equalsIgnoreCase("color")) return COLOR;
-
+            if (tok.equalsIgnoreCase("B")  || tok.equalsIgnoreCase("brush")) return BRUSH;
+            if (tok.equalsIgnoreCase("K")  || tok.equalsIgnoreCase("key"))   return KEY;
+            if (tok.equalsIgnoreCase("Cd") || tok.equalsIgnoreCase("code"))  return CODE;
+            if (tok.equalsIgnoreCase("Cl") || tok.equalsIgnoreCase("color")) return COLOR;
             return 0;
         }
 
@@ -408,40 +447,29 @@ public class GridEnv extends Environment {
             return false;
         }
 
-        // paintTarget accepts T/Ch or table/chair
         boolean paintTarget(String targetTok) {
             Location a = getAgPos(0);
-
-            // PDF requirement: need brush + color in inventory
             if (!hasBrush || !hasColor) return false;
 
             if (targetTok.equalsIgnoreCase("T") || targetTok.equalsIgnoreCase("table")) {
-                if (hasObject(TABLE, a)) {
-                    tableColored = true;
-                    return true;
-                }
+                if (hasObject(TABLE, a)) { tableColored = true; return true; }
                 return false;
             }
-
             if (targetTok.equalsIgnoreCase("Ch") || targetTok.equalsIgnoreCase("chair")) {
-                if (hasObject(CHAIR, a)) {
-                    chairColored = true;
-                    return true;
-                }
+                if (hasObject(CHAIR, a)) { chairColored = true; return true; }
                 return false;
             }
-
             return false;
         }
 
         boolean openDoor() {
-            // PDF: need key + code
             if (!hasKey || !hasCode) return false;
 
             Location a = getAgPos(0);
-            Location d = getDoorLocation();
-            if (d == null) return false;
+            List<Location> ds = getOccupiedLocationsWithMask(DOOR);
+            if (ds.isEmpty()) return false;
 
+            Location d = ds.get(0);
             int manhattan = Math.abs(a.x - d.x) + Math.abs(a.y - d.y);
             if (manhattan != 1) return false;
 
@@ -449,68 +477,10 @@ public class GridEnv extends Environment {
             return true;
         }
 
-        private Location getDoorLocation() {
-            List<Location> ds = getOccupiedLocationsWithMask(DOOR);
-            return ds.isEmpty() ? null : ds.get(0);
-        }
-
-        // R(s): -0.01 if empty, else -0.02 per compatible carried, -0.03 per incompatible carried.
-        // With your goal (paint + open), all four items are compatible.
         double carryingReward() {
             int carried = carriedCount();
             if (carried == 0) return -0.01;
-
-            // all carried are compatible in this task
             return carried * (-0.02);
-        }
-    }
-
-    // ------------------ View (with labels) ------------------
-
-    class GridView extends GridWorldView {
-
-        private final int cellSizeLocal;
-        private final Font defaultFontLocal;
-
-        public GridView(GridModel model) {
-            super(model, "GridEnv (PDF fixed)", 500);
-
-            int viewSize = 500;
-            this.cellSizeLocal = Math.max(8, viewSize / Math.max(WIDTH, HEIGHT));
-            this.defaultFontLocal = new Font("Arial", Font.BOLD, 14);
-
-            setVisible(true);
-        }
-
-        private void label(Graphics g, int x, int y, String text) {
-            g.setColor(Color.BLACK);
-            drawString(g, x, y, defaultFontLocal, text);
-        }
-
-        @Override
-        public void draw(Graphics g, int x, int y, int object) {
-            super.draw(g,x,y,object);
-            if ((object & OBST) != 0) {
-                g.setColor(Color.BLACK);
-                g.fillRect(x + 2, y + 2, cellSizeLocal - 2, cellSizeLocal - 2);
-                return;
-            }
-
-            if ((object & BRUSH) != 0) label(g, x, y, "B");
-            if ((object & KEY)   != 0) label(g, x, y, "K");
-            if ((object & CODE)  != 0) label(g, x, y, "Cd");
-            if ((object & COLOR) != 0) label(g, x, y, "Cl");
-            if ((object & DOOR)  != 0) label(g, x, y, "D");
-            if ((object & CHAIR) != 0) label(g, x, y, "Ch");
-            if ((object & TABLE) != 0) label(g, x, y, "T");
-        }
-
-
-
-        @Override
-        public void drawAgent(Graphics g, int x, int y, Color c, int id) {
-            super.drawAgent(g, x, y, c, id);
-            label(g, x, y, "A");
         }
     }
 }
