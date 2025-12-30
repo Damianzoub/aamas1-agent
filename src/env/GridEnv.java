@@ -60,6 +60,13 @@ public class GridEnv extends Environment {
         informAgsEnvironmentChanged();
     }
 
+    //helper για τους agent και tα index tous
+    private int agIndex(String agName){
+        if (agName.equals("main_agent")) return 0;
+        if (agName.equals("second_agent")) return 1;
+        return -1;
+    }
+
     @Override
     public boolean executeAction(String agName, Structure action) {
         try {
@@ -196,71 +203,69 @@ public class GridEnv extends Environment {
 
     // ===================== Percepts (PDF coords, matching your ASL) =====================
 
-    void updatePercepts() {
-        clearPercepts();
-
-        Location p = model.getAgPos(0);
-        if (p == null){
-            p = new Location(model.ix(1),model.iy(1));
-        }
-        // pos(X,Y)
-        addPercept(AG_NAME,ASSyntax.createLiteral(
-               "pos(" + model.px(p.x) + "," + model.py(p.y) + ")"
+    void updatePerceptsFor(String agName) {
+        clearPercepts(agName);
+    
+        int idx = agIndex(agName);
+        Location p = model.getAgPos(idx);
+        if (p == null) p = new Location(model.ix(1), model.iy(1));
+    
+        addPercept(agName, ASSyntax.createLiteral(
+            "pos(" + model.px(p.x) + "," + model.py(p.y) + ")"
         ));
-
-        // objects: at(Symbol,X,Y)
-        addObjectPerceptIfPresent(BRUSH, "b");
-        addObjectPerceptIfPresent(KEY,   "k");
-        addObjectPerceptIfPresent(CODE,  "cd");
-        addObjectPerceptIfPresent(COLOR, "cl");
-        addObjectPerceptIfPresent(TABLE, "t");
-        addObjectPerceptIfPresent(CHAIR, "ch");
-        addObjectPerceptIfPresent(DOOR,  "d");
-
-
-        // inventory: provide BOTH has/1 and have/1 so your old plans won’t break
-        if (model.hasBrush) addPercept(AG_NAME, ASSyntax.createLiteral("have(b)"));
-        if (model.hasKey)   addPercept(AG_NAME, ASSyntax.createLiteral("have(k)"));
-        if (model.hasCode)  addPercept(AG_NAME, ASSyntax.createLiteral("have(cd)"));
-        if (model.hasColor) addPercept(AG_NAME, ASSyntax.createLiteral("have(cl)"));
-
-
-        // capacity percepts (your ASL uses these)
-        addPercept( AG_NAME,ASSyntax.createLiteral("max_carry(" + GridModel.MAX_CARRY + ")"));
-        addPercept( AG_NAME,ASSyntax.createLiteral("carrying_count(" + model.carriedCount() + ")"));
-
-        // status
-        if (model.tableColored){
-            addPercept(AG_NAME, ASSyntax.createLiteral("colored(table)"));
-        }
-        if (model.chairColored){
-            addPercept(AG_NAME, ASSyntax.createLiteral("colored(chair)"));
-        }
-        if (model.doorOpen){
-            addPercept(AG_NAME, ASSyntax.createLiteral("door(open)"));
-        }else{
-            addPercept(AG_NAME, ASSyntax.createLiteral("door(closed)"));
-        }
-        // walls
+    
+        // objects same for both
+        addObjectPerceptIfPresent(agName, BRUSH, "b");
+        addObjectPerceptIfPresent(agName, KEY,   "k");
+        addObjectPerceptIfPresent(agName, CODE,  "cd");
+        addObjectPerceptIfPresent(agName, COLOR, "cl");
+        addObjectPerceptIfPresent(agName, TABLE, "t");
+        addObjectPerceptIfPresent(agName, CHAIR, "ch");
+        addObjectPerceptIfPresent(agName, DOOR,  "d");
+    
+        // inventory: ΠΡΟΣΟΧΗ -> τώρα είναι global booleans (θα το πιάσουμε πιο κάτω)
+        if (model.hasBrush) addPercept(agName, ASSyntax.createLiteral("have(b)"));
+        if (model.hasKey)   addPercept(agName, ASSyntax.createLiteral("have(k)"));
+        if (model.hasCode)  addPercept(agName, ASSyntax.createLiteral("have(cd)"));
+        if (model.hasColor) addPercept(agName, ASSyntax.createLiteral("have(cl)"));
+    
+        addPercept(agName, ASSyntax.createLiteral("max_carry(" + GridModel.MAX_CARRY + ")"));
+        addPercept(agName, ASSyntax.createLiteral("carrying_count(" + model.carriedCount() + ")"));
+    
+        if (model.tableColored) addPercept(agName, ASSyntax.createLiteral("colored(table)"));
+        if (model.chairColored) addPercept(agName, ASSyntax.createLiteral("colored(chair)"));
+    
+        addPercept(agName, ASSyntax.createLiteral(model.doorOpen ? "door(open)" : "door(closed)"));
+    
         for (Location l : model.getOccupiedLocationsWithMask(OBST)) {
-            addPercept(AG_NAME,ASSyntax.createLiteral(
-                    "wall(" + model.px(l.x) + "," + model.py(l.y) + ")"
+            addPercept(agName, ASSyntax.createLiteral(
+                "wall(" + model.px(l.x) + "," + model.py(l.y) + ")"
             ));
         }
-
-        // episode/step/experiment
-        addPercept(AG_NAME, ASSyntax.createLiteral("episode(" + episode + ")"));
-        addPercept(AG_NAME, ASSyntax.createLiteral("step(" + stepCounter + ")"));
-        if (experimentMode) addPercept(AG_NAME,ASSyntax.createLiteral("experiment(running)"));
+    
+        // κάνε και percept για τον άλλο agent ώστε να τον “βλέπει” σαν εμπόδιο
+        int otherIdx = (idx == 0) ? 1 : 0;
+        Location o = model.getAgPos(otherIdx);
+        if (o != null) {
+            addPercept(agName, ASSyntax.createLiteral(
+                "agent_at(" + model.px(o.x) + "," + model.py(o.y) + ")"
+            ));
+        }
+    
+        addPercept(agName, ASSyntax.createLiteral("episode(" + episode + ")"));
+        addPercept(agName, ASSyntax.createLiteral("step(" + stepCounter + ")"));
+        if (experimentMode) addPercept(agName, ASSyntax.createLiteral("experiment(running)"));
     }
+    
 
-    private void addObjectPerceptIfPresent(int mask, String sym) {
+    private void addObjectPerceptIfPresent(String agName, int mask, String sym) {
         for (Location l : model.getOccupiedLocationsWithMask(mask)) {
-            addPercept(AG_NAME, ASSyntax.createLiteral(
-                    "at(" + sym + "," + model.px(l.x) + "," + model.py(l.y) + ")"
+            addPercept(agName, ASSyntax.createLiteral(
+                "at(" + sym + "," + model.px(l.x) + "," + model.py(l.y) + ")"
             ));
         }
     }
+    
 
     private static String stripQuotes(String s) {
         return s.replace("\"", "");
@@ -323,7 +328,7 @@ public class GridEnv extends Environment {
         boolean doorOpen     = false;
 
         public GridModel() {
-            super(WIDTH, HEIGHT, 1);
+            super(WIDTH, HEIGHT, 2);
         }
 
         // PDF (1-based, bottom-left) -> internal (0-based, top-left)
@@ -337,7 +342,10 @@ public class GridEnv extends Environment {
         void resetToPdfLayout() {
             clearAllObjects();
 
-            try { setAgPos(0, ix(1), iy(1)); } catch (Exception e) { e.printStackTrace(); }
+            try {
+                 setAgPos(0, ix(1), iy(1)); 
+                 setAgPos(1,ix(3),iy(3));
+            } catch (Exception e) { e.printStackTrace(); }
 
             // walls (PDF): (2,1), (2,2), (4,4), (4,5)
             add(OBST, ix(2), iy(1));
@@ -467,11 +475,11 @@ public class GridEnv extends Environment {
             Location a = getAgPos(0);
             if (!hasBrush || !hasColor) return false;
 
-            if (targetTok.equalsIgnoreCase("T") || targetTok.equalsIgnoreCase("table")) {
+            if (targetTok.equalsIgnoreCase("t") || targetTok.equalsIgnoreCase("table")) {
                 if (hasObject(TABLE, a)) { tableColored = true; return true; }
                 return false;
             }
-            if (targetTok.equalsIgnoreCase("Ch") || targetTok.equalsIgnoreCase("chair")) {
+            if (targetTok.equalsIgnoreCase("ch") || targetTok.equalsIgnoreCase("chair")) {
                 if (hasObject(CHAIR, a)) { chairColored = true; return true; }
                 return false;
             }
