@@ -55,7 +55,7 @@ public class GridEnv extends Environment {
                 () -> startExperiment(1)
         );
 
-        updatePercepts();
+        updatePerceptsAll();
         if (view != null) view.updateFromModel(model);
         informAgsEnvironmentChanged();
     }
@@ -64,12 +64,14 @@ public class GridEnv extends Environment {
     private int agIndex(String agName){
         if (agName.equals("main_agent")) return 0;
         if (agName.equals("second_agent")) return 1;
-        return -1;
+        throw new RuntimeException("Unknown agent: "+agName);
     }
 
     @Override
     public boolean executeAction(String agName, Structure action) {
         try {
+            int idx = agIndex(agName);
+            int otherIdx = (idx ==0)? 1 : 0;
             String fun = action.getFunctor();
             double reward = 0.0;
 
@@ -90,8 +92,8 @@ public class GridEnv extends Environment {
             // move(dir)
             else if (fun.equals("move") && action.getArity() == 1) {
                 String dir = stripQuotes(action.getTerm(0).toString());
-
-                Location a = model.getAgPos(0);
+                
+                Location a = model.getAgPos(idx);
                 int nx = a.x, ny = a.y;
 
                 if (dir.equalsIgnoreCase("up"))         ny -= 1;   // internal coords
@@ -102,7 +104,7 @@ public class GridEnv extends Environment {
 
                 if (reward == 0.0) {
                     if (model.canMoveAgentTo(nx, ny)) {
-                        model.setAgPos(0, nx, ny);
+                        model.setAgPos(idx, nx, ny);
                         reward = -0.02;
                     } else reward = -0.03;
                 }
@@ -117,7 +119,7 @@ public class GridEnv extends Environment {
                 int gx = model.ix(X);
                 int gy = model.iy(Y);
 
-                Location start = model.getAgPos(0);
+                Location start = model.getAgPos(idx);
                 boolean[][] blocked = model.blockedGrid();
 
                 if (blocked[gy][gx]) {
@@ -127,7 +129,7 @@ public class GridEnv extends Environment {
                     if (!path.isEmpty()) {
                         if (path.size() >= 2) {
                             PathFinding.Cell next = path.get(1);
-                            model.setAgPos(0, next.x, next.y);
+                            model.setAgPos(idx, next.x, next.y);
                         }
                         reward = -0.02;
                     } else reward = -0.03;
@@ -188,7 +190,7 @@ public class GridEnv extends Environment {
             reward += model.carryingReward();
 
             if (countedStep) stepCounter++;
-            updatePercepts();
+            updatePerceptsAll();
             addPercept(AG_NAME,ASSyntax.createLiteral("reward(" + reward + ")"));
             
             if (view != null) view.updateFromModel(model);
@@ -257,6 +259,11 @@ public class GridEnv extends Environment {
         if (experimentMode) addPercept(agName, ASSyntax.createLiteral("experiment(running)"));
     }
     
+    void updatePerceptsAll() {
+        updatePerceptsFor("main_agent");
+        updatePerceptsFor("second_agent");
+    }
+    
 
     private void addObjectPerceptIfPresent(String agName, int mask, String sym) {
         for (Location l : model.getOccupiedLocationsWithMask(mask)) {
@@ -287,7 +294,7 @@ public class GridEnv extends Environment {
     private void resetEpisode() {
         model.resetToPdfLayout();
         stepCounter = 0;
-        updatePercepts();
+        updatePerceptsAll();
         if (view != null) view.updateFromModel(model);
         informAgsEnvironmentChanged();
     }
@@ -317,7 +324,7 @@ public class GridEnv extends Environment {
     public class GridModel extends GridWorldModel {
 
         static final int MAX_CARRY = 3;
-
+        //μηπως να το αλλαξουμε με ArrayList booleans για να ειναι per-agent?
         boolean hasBrush = false;
         boolean hasKey   = false;
         boolean hasCode  = false;
