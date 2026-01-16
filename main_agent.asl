@@ -46,9 +46,9 @@ wall(4,5).
 
 
 +!mission <- .print("### MISSION STARTED ###");
+             !achieve_open(d);
              !achieve_colored(t);
              !achieve_colored(ch);
-             !achieve_open(d);
              .print("### MISSION ACCOMPLISHED ###").
 
 //If Obj is already colored, do nothing
@@ -67,7 +67,8 @@ wall(4,5).
     !collect_all(ReqList);
     !go_to_obj(ch);
     do(paint(chair));
-    +colored(chair). 
+    +colored(chair);
+    !drop_all. 
 
 //Goal: achieve_open(D)
 //If the door is already open, do nothing
@@ -82,7 +83,8 @@ wall(4,5).
 <- !collect_all(ReqList);          // collect required items
    !go_to_obj(d);                  // move to the door's location
    do(open(door));                   // update belief: door is now 
-   +door(open).
+   +door(open);
+   !drop_all.
 //Navigation goals for the agent
 
 //Optional high-level move goals (shortcut wrappers)
@@ -112,26 +114,42 @@ wall(4,5).
 
 
 //Collect a single object O
-+!collect_object(b) <- do(pick(brush));  -at(b,_,_).
-+!collect_object(k) <- do(pick(key));    -at(k,_,_).
-+!collect_object(cd) <- do(pick(code));  -at(cd,_,_).
-+!collect_object(cl) <- do(pick(color)); -at(cl,_,_).
++!collect_object(b) <- do(pick(brush));  -at(b,_,_); +have(b).
++!collect_object(k) <- do(pick(key));    -at(k,_,_); +have(k).
++!collect_object(cd) <- do(pick(code));  -at(cd,_,_); +have(cd).
++!collect_object(cl) <- do(pick(color)); -at(cl,_,_); +have(cl).
 
 
 //Collect all objects in a list
++!collect_all([H|T]) : have(H) <- !collect_all(T).
+
 +!collect_all([]) <- true.         //empty list: nothing to do
 
-+!collect_all([H|T]) <- !go_to_obj(H);           // go to object H
++!collect_all([H|T]): not have(H) <- 
+                        !go_to_obj(H);           // go to object H
                         !collect_object(H);      // pick it up (if capacity allows)
                         !collect_all(T).         // then collect the rest of the list
 
 //Move to the location of object O                        
 +!go_to_obj(O): at(O,X,Y) <- !go_to(X,Y). 
 
+//drop 
++!drop_all <-
+    .findall(O, have(O), L);
+    !drop_list(L).
+
++!drop_list([]) <- true.
++!drop_list([H|T]) <- !drop_object(H); !drop_list(T).
+
++!drop_object(b)  : pos(X,Y) <- do(drop(brush)); -have(b);  +at(b,X,Y).
++!drop_object(k)  : pos(X,Y) <- do(drop(key));   -have(k);  +at(k,X,Y).
++!drop_object(cd) : pos(X,Y) <- do(drop(code));  -have(cd); +at(cd,X,Y).
++!drop_object(cl) : pos(X,Y) <- do(drop(color)); -have(cl); +at(cl,X,Y).
 
 //Utility predicates for the agent
 
 //Compute how many objects the agent is currently carrying
+can_carry_more :- max_carry(M) & carrying_count(N) & N < M.
 carrying_count(N) :- .findall(O, have(O), L) & .length(L, N).
  
 //Compatible

@@ -146,7 +146,7 @@ public class Env extends Environment {
         public boolean doorOpen = false;
 
         public MyGridModel() {
-            super(6, 6, 1); 
+            super(5, 5, 1); 
             try {
                 setAgPos(0, 0, 4); 
                 //setAgPos(1, 3, 3); 
