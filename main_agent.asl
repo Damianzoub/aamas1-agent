@@ -114,10 +114,11 @@ wall(4,5).
 
 
 //Collect a single object O
-+!collect_object(b) <- do(pick(brush));  -at(b,_,_); +have(b).
-+!collect_object(k) <- do(pick(key));    -at(k,_,_); +have(k).
-+!collect_object(cd) <- do(pick(code));  -at(cd,_,_); +have(cd).
-+!collect_object(cl) <- do(pick(color)); -at(cl,_,_); +have(cl).
++!collect_object(b)  <- do(pick(brush)).
++!collect_object(k)  <- do(pick(key)).
++!collect_object(cd) <- do(pick(code)).
++!collect_object(cl) <- do(pick(color)).
+
 
 
 //Collect all objects in a list
@@ -135,18 +136,25 @@ wall(4,5).
 
 //drop 
 +!drop_all <-
-    .findall(O, have(O), L);
+    .findall(O, (have(O) & (O==b | O==k | O==cd | O==cl)), L);
     !drop_list(L).
 
 +!drop_list([]) <- true.
 +!drop_list([H|T]) <- !drop_object(H); !drop_list(T).
++!drop_object(O) : not have(O) <- true.
 
-+!drop_object(b)  : pos(X,Y) <- do(drop(brush)); -have(b);  +at(b,X,Y).
-+!drop_object(k)  : pos(X,Y) <- do(drop(key));   -have(k);  +at(k,X,Y).
-+!drop_object(cd) : pos(X,Y) <- do(drop(code));  -have(cd); +at(cd,X,Y).
-+!drop_object(cl) : pos(X,Y) <- do(drop(color)); -have(cl); +at(cl,X,Y).
++!drop_object(b)  : have(b)  <- do(drop(brush)).
++!drop_object(k)  : have(k)  <- do(drop(key)).
++!drop_object(cd) : have(cd) <- do(drop(code)).
++!drop_object(cl) : have(cl) <- do(drop(color)).
+
 
 //Utility predicates for the agent
+// --- ALIASES: map env inventory names -> your short symbols ---
+have(b)  :- have(brush).
+have(k)  :- have(key).
+have(cd) :- have(code).
+have(cl) :- have(color).
 
 //Compute how many objects the agent is currently carrying
 can_carry_more :- max_carry(M) & carrying_count(N) & N < M.

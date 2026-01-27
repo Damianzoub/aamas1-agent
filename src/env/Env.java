@@ -84,6 +84,9 @@ public class Env extends Environment {
                     result = model.openObject(target);
                     if (result) reward += 0.8;
                 }
+            }else if (actFunctor.equals("drop")){
+                String item = action.getTerm(0).toString();
+                result = model.dropItem(item);
             }
 
             // Penalties
@@ -261,6 +264,26 @@ public class Env extends Environment {
                 return true;
             }
             return false;
+        }
+
+        boolean dropItem(String item){
+            Location loc = getAgPos(0);
+
+            if (!inventory.contains(item)) return false;
+
+            int mask=0;
+            if (item.equals("brush")) mask = BRUSH;
+            if (item.equals("key"))   mask = KEY;
+            if (item.equals("code"))  mask = CODE;
+            if (item.equals("color")) mask = COLOR;
+
+            if (mask == 0) return false;
+
+            // optional: don't allow drop on occupied cell if you want
+            // (but your grid uses bitmasks so it's okay to stack)
+            add(mask, loc.x, loc.y);
+            inventory.remove(item);
+            return true;
         }
 
         boolean paintObject(String obj) {
