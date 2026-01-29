@@ -1,188 +1,91 @@
-+!start <- 
-    .print("Running Agent2");
-    !mission;
-    .print("Agent2 Finished").
-
++!start <- .print("Running Agent2"); !mission.
 !start.
 
-// --- SAME  KNOWLEDGE ---
-grid_size(5,5).
+grid_size(5,5). 
 max_carry(3).
-
-object(t,table).
-object(ch,chair).
+object(t,table). 
+object(ch,chair). 
 object(d,door).
-object(cl,color).
-object(cd,code).
-object(b,brush).
+object(cl,color). 
+object(cd,code). 
+object(b,brush). 
 object(k,key).
 
-needs_to_paint(t ,[b,cl]).
-needs_to_paint(ch,[b,cl]).
+needs_to_paint(t ,[b,cl]). 
+needs_to_paint(ch,[b,cl]). 
 needs_to_open(d ,[k,cd]).
-
-at(b,1,5).
-at(k,1,4).
-at(cd,3,5).
-at(cl,5,5).
-
-at(ch,4,2).
-at(d,3,1).
-at(t,5,1).
-
-wall(2,2).
-wall(2,1).
-wall(4,4).
-wall(4,5).
-
-// --- negotiation config ---
 other_agent(main_agent).
-// NO priority here -> loses ties
 
-// ===================== MISSION =====================
-
-+!mission <-
-    .print("### AGENT2 MISSION STARTED ###");
++!mission <- .print("### AGENT2 MISSION STARTED ###");
     !negotiate_then_maybe_do(open_door);
     !negotiate_then_maybe_do(paint_table);
     !negotiate_then_maybe_do(paint_chair);
     .print("### AGENT2 MISSION ENDED ###").
 
-// ===================== NEGOTIATION PROTOCOL (same) =====================
-//map task -> actual goals
+// ===================== NEGOTIATION =====================
+
 +!do_task(open_door) <- !achieve_open(d).
 +!do_task(paint_table) <- !achieve_colored(t).
 +!do_task(paint_chair) <- !achieve_colored(ch).
 
++!compute_utility(Task,U) <- !my_utility(Task,U).
 
-//utility wrapper so !compute_utility always exists
-+!compute_utility(open_door,U) <- !my_utility(open_door,U).
-+!compute_utility(paint_table,U) <- !my_utility(paint_table,U).
-+!compute_utility(paint_chair,U) <- !my_utility(paint_chair,U).
-
-//negotiation
-+!negotiate_then_maybe_do(Task) <- 
-                    !negotiate(Task,0);
-                    !after_negotiate(Task).
-
++!negotiate_then_maybe_do(Task) <- !negotiate(Task,0); !after_negotiate(Task).
 +!after_negotiate(Task) : owner(Task,me) <- !do_task(Task).
-
 +!after_negotiate(Task) : owner(Task,other) <- true.
-//main negotiation loop
-+! negotiate(Task,N) : N < 15 <-
-                        !compute_utility(Task,U);
-                        -+myu(Task,U);
-                        -otheru(Task,_);
-                        -decided(Task,_);
-                        -owner(Task,_);
-                        ?other_agent(OA);
-                        .send(OA,tell,inform(Task,U));
-                        !wait_other_inform(Task);
-                        ?otheru(Task,Uo);
+
++!negotiate(Task,N) : N < 15 <-
+                        !compute_utility(Task,U); -+myu(Task,U);
+                        -otheru(Task,_); -decided(Task,_); -owner(Task,_);
+                        ?other_agent(OA); .send(OA,tell,inform(Task,U));
+                        !wait_other_inform(Task); ?otheru(Task,Uo);
                         !after_otheru(Task,N,U,Uo).
 
-//in case infinity loop stop
-+!negotiate(Task,N) : N >= 15 <-
-                        .print("Agent negotiation failed too many times for ",Task);
-                        +owner(Task,other).
++!negotiate(Task,N) : N >= 15 <- +owner(Task,other).
 
 should_propose(U,Uo) :- U > Uo.
-
 +!after_otheru(Task,N,U,Uo) : should_propose(U,Uo) <- 
-                            ?other_agent(OA2);
-                            .send(OA2,tell,propose(Task));
+                            ?other_agent(OA2); .send(OA2,tell,propose(Task));
                             !wait_accept_or_reject(Task,N).
-
 +!after_otheru(Task,N,U,Uo) : not should_propose(U,Uo) <- !wait_propose(Task,N).
 
+// ===================== FIXED WAIT STATES =====================
+
 +!wait_other_inform(Task) : otheru(Task,_) <- true.
-+!wait_other_inform(Task) <- !wait_other_inform(Task).
++!wait_other_inform(Task) <- .wait(100); !wait_other_inform(Task).
 
-+!wait_propose(Task,N) : decided(Task,me) <- true.
-+!wait_propose(Task,N) : decided(Task,other) <- true.
-+!wait_propose(Task,N) : decided(Task,restart) <-
-                        -decided(Task,restart);
-                        N1 = N+1;
-                        !negotiate(Task,N1).
++!wait_propose(Task,N) : decided(Task,me) | decided(Task,other) <- true.
++!wait_propose(Task,N) : decided(Task,restart) <- 
+                        -decided(Task,restart); N1 = N+1; !negotiate(Task,N1).
++!wait_propose(Task,N) <- .wait(100); !wait_propose(Task,N).
 
-+!wait_propose(Task,N) <- !wait_propose(Task,N).
-
-+!wait_accept_or_reject(Task,N) : decided(Task,me) <- true.
-+!wait_accept_or_reject(Task,N) : decided(Task,other) <- true.
++!wait_accept_or_reject(Task,N) : decided(Task,me) | decided(Task,other) <- true.
 +!wait_accept_or_reject(Task,N) : decided(Task,restart) <-
-                                  -decided(Task,restart);
-                                  N1 = N+1;
-                                  !negotiate(Task,N1).
+                                  -decided(Task,restart); N1 = N+1; !negotiate(Task,N1).
++!wait_accept_or_reject(Task,N) <- .wait(100); !wait_accept_or_reject(Task,N).
 
-+!wait_accept_or_reject(Task,N) <- !wait_accept_or_reject(Task,N).
+// ===================== FIXED MESSAGE HANDLERS =====================
 
++inform(Task,Uo)[source(Other)] : myu(Task,_) <- -+otheru(Task,Uo).
++inform(Task,Uo)[source(Other)] : not myu(Task,_) <- 
+                                        -+otheru(Task,Uo); !compute_utility(Task,U);
+                                        -+myu(Task,U); .send(Other,tell,inform(Task,U)).
 
-//message handlers
-+message(tell,Other,inform(Task,Uo)) : myu(Task,_) <- -+otheru(Task,Uo).
-+message(tell,Other,inform(Task,Uo)) : not myu(Task,_) <- 
-                                        -+otheru(Task,Uo);
-                                        !compute_utility(Task,U);
-                                        -+myu(Task,U);
-                                        .send(Other,tell,inform(Task,U)).
++propose(Task)[source(Other)] : myu(Task,U) & otheru(Task,Uo) & (Uo >= U) <-
+    .send(Other,tell,accept(Task)); -+decided(Task,other); -+owner(Task,other).
 
-// agent2 loses if other >= me
-other_should_win(U,Uo) :- Uo > U.
-other_should_win(U,Uo) :- Uo == U.
++propose(Task)[source(Other)] : myu(Task,U) & otheru(Task,Uo) & not (Uo >= U) <-
+    .send(Other,tell,reject(Task)); -+decided(Task,restart).
 
-+message(tell,Other,propose(Task)) : myu(Task,U) & otheru(Task,Uo) & other_should_win(U,Uo) <-
-    .send(Other,tell,accept(Task));
-    -decided(Task,_);
-    +decided(Task,other);
-    -owner(Task,_);
-    +owner(Task,other).
++accept(Task)[source(Other)] <- -+decided(Task,me); -+owner(Task,me).
++reject(Task)[source(Other)] <- -+decided(Task,restart).
 
-+message(tell,Other,propose(Task)) : myu(Task,U) & otheru(Task,Uo) & not other_should_win(U,Uo) <-
-    .send(Other,tell,reject(Task));
-    -decided(Task,_);
-    +decided(Task,restart).
+// ===================== TASK EXECUTION =====================
 
-+message(tell,Other,accept(Task)) <-
-    -decided(Task,_);
-    +decided(Task,me);
-    -owner(Task,_);
-    +owner(Task,me).
-
-+message(tell,Other,reject(Task)) <-
-    -decided(Task,_);
-    +decided(Task,restart).
-
-// ===================== UTILITY =====================
-
-+!my_utility(open_door, U) : pos(X,Y) & at(d,DX,DY) <-
-    !manhattan(X,Y,DX,DY,D); 
-    U = 100 - D.
-
-+!my_utility(paint_table, U) : pos(X,Y) & at(t,TX,TY) <-
-    !manhattan(X,Y,TX,TY,D); 
-    U = 100 - D.
-
-+!my_utility(paint_chair, U) : pos(X,Y) & at(ch,CX,CY) <-
-    !manhattan(X,Y,CX,CY,D); 
-    U = 100 - D.
-
-+!manhattan(X1,Y1,X2,Y2,D) <-
-    DX = X1 - X2; 
-    DY = Y1 - Y2;
-    !abs(DX,ADX);
-    !abs(DY,ADY);
-    D = ADX + ADY.
-
++!my_utility(Task, U) : pos(X,Y) & at(Obj,TX,TY) <- !manhattan(X,Y,TX,TY,D); U = 100 - D.
++!manhattan(X1,Y1,X2,Y2,D) <- DX = X1 - X2; DY = Y1 - Y2; !abs(DX,ADX); !abs(DY,ADY); D = ADX + ADY.
 +!abs(N,A) : N >= 0 <- A = N.
 +!abs(N,A) : N < 0 <- A = -N.
-    
-
-// ===================== TASK -> GOAL =====================
-
-+!do_task(open_door)   <- !achieve_open(d).
-+!do_task(paint_table) <- !achieve_colored(t).
-+!do_task(paint_chair) <- !achieve_colored(ch).
-
-// ===================== SAME WORKER CODE (unchanged) =====================
 
 // colored
 +!achieve_colored(t) : colored(table) <- true.
@@ -292,3 +195,5 @@ compatible(ch).
 compatible(d).
 
 incompatible(O) :- not compatible(O) & have(O).
+
+
