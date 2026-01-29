@@ -63,9 +63,11 @@ other_agent(main_agent).
 //negotiation
 +!negotiate_then_maybe_do(Task) <- 
                     !negotiate(Task,0);
-                    owner(Task,me);
-                    !do_task(Task).
+                    !after_negotiate(Task).
 
++!after_negotiate(Task) : owner(Task,me) <- !do_task(Task).
+
++!after_negotiate(Task) : owner(Task,other) <- true.
 //main negotiation loop
 +! negotiate(Task,N) : N < 15 <-
                         !compute_utility(Task,U);
@@ -73,10 +75,10 @@ other_agent(main_agent).
                         -otheru(Task,_);
                         -decided(Task,_);
                         -owner(Task,_);
-                        other_agent(OA);
+                        ?other_agent(OA);
                         .send(OA,tell,inform(Task,U));
                         !wait_other_inform(Task);
-                        otheru(Task,Uo);
+                        ?otheru(Task,Uo);
                         !after_otheru(Task,N,U,Uo).
 
 //in case infinity loop stop
@@ -87,7 +89,7 @@ other_agent(main_agent).
 should_propose(U,Uo) :- U > Uo.
 
 +!after_otheru(Task,N,U,Uo) : should_propose(U,Uo) <- 
-                            other_agent(OA2);
+                            ?other_agent(OA2);
                             .send(OA2,tell,propose(Task));
                             !wait_accept_or_reject(Task,N).
 

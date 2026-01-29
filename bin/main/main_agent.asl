@@ -75,20 +75,22 @@ priority. //Agent1 wins ties
 //negotiation
 +!negotiate_then_maybe_do(Task) <- 
                     !negotiate(Task,0);
-                    owner(Task,me);
-                    !do_task(Task).
+                    !after_negotiate(Task).
 
++!after_negotiate(Task) : owner(Task,me) <- !do_task(Task).
+
++!after_negotiate(Task) : owner(Task,other) <- true.
 //main negotiation loop
-+! negotiate(Task,N) : N < 15 <-
++!negotiate(Task,N) : N < 15 <-
                         !compute_utility(Task,U);
                         -+myu(Task,U);
                         -otheru(Task,_);
                         -decided(Task,_);
                         -owner(Task,_);
-                        other_agent(OA);
+                        ?other_agent(OA);
                         .send(OA,tell,inform(Task,U));
                         !wait_other_inform(Task);
-                        otheru(Task,Uo);
+                        ?otheru(Task,Uo);
                         !after_otheru(Task,N,U,Uo).
 
 //in case infinity loop stop
@@ -97,7 +99,7 @@ priority. //Agent1 wins ties
                         +owner(Task,me).
 
 +!after_otheru(Task,N,U,Uo) : should_propose(U,Uo) <- 
-                              other_agent(OA2);
+                              ?other_agent(OA2);
                               .send(OA2,tell,propose(Task));
                               !wait_accept_or_reject(Task,N).
 
@@ -139,7 +141,7 @@ should_propose(U,Uo) :- U == Uo & priority.
 //rule other wins only if higher
 other_should_win(U,Uo) :- Uo > U.
 
-+message(tell,Other,propose(Task)) : myu(Task,U) & otheru(Tsak,Uo) & other_should_win(U,Uo) <-
++message(tell,Other,propose(Task)) : myu(Task,U) & otheru(Task,Uo) & other_should_win(U,Uo) <-
                                     .send(Other,tell,accept(Task));
                                     -decided(Task,_);
                                     +decided(Task,other);
