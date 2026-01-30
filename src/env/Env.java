@@ -106,16 +106,13 @@ public class Env extends Environment {
             return false;
         }
 
-        if (result) {
-            if (actFunctor.equals("move")) {
-                model.stepDynamics(); // dynamics only after movement
-            }
-            logger.info(agName + " doing: " + action + " | Reward: " + reward);
-            if (view != null) view.repaint();
-            updatePercepts();
-            try { Thread.sleep(250); } catch (Exception e) {}
-            informAgsEnvironmentChanged();
+        if (actFunctor.equals("move") && result){
+            model.stepDynamics();
         }
+        logger.info(agName + "doing: " + action + " | result=" +result + "| Reward: "+reward);
+        if (view != null) view.repaint();
+        updatePercepts();
+        informAgsEnvironmentChanged();
         return result;
     }
 
@@ -136,9 +133,9 @@ public class Env extends Environment {
         }
 
         // global task-state percepts (same for everyone)
-        if (model.tablePainted) addPercept(Literal.parseLiteral("colored(table)"));
-        if (model.chairPainted) addPercept(Literal.parseLiteral("colored(chair)"));
-        if (model.doorOpen)     addPercept(Literal.parseLiteral("door(open)"));
+        if (model.tablePainted) addPercept(Literal.parseLiteral("status(table,painted)"));
+        if (model.chairPainted) addPercept(Literal.parseLiteral("status(chair,painted"));
+        if (model.doorOpen)     addPercept(Literal.parseLiteral("status(door,open)"));
 
         // global object locations (same for everyone)
         for (int i = 0; i < model.getWidth(); i++) {
@@ -166,7 +163,7 @@ public class Env extends Environment {
         public boolean doorOpen = false;
 
         private int stepCount = 0;
-        private static final int DYN_PERIOD = 3;
+        private static final int DYN_PERIOD = 100; // to stop the dynamic change for now
 
         public MyGridModel() {
             super(5, 5, NB_AGS);
@@ -224,12 +221,21 @@ public class Env extends Environment {
             stepCount++;
             if (stepCount % DYN_PERIOD != 0) return;
 
+            // Every DYN_PERIOD agent-moves, ALL movable objects shift (if they are on the grid).
+            // Static objects (door/table/chair) never move.
             int[] movable = new int[] { BRUSH, KEY, CODE, COLOR };
-            int tries = 6;
 
-            while (tries-- > 0) {
-                int mask = movable[(int)(Math.random() * movable.length)];
-                if (moveObjectOneStepRandom(mask)) break;
+            // Shuffle order each time to reduce bias and collision patterns.
+            List<Integer> order = new ArrayList<>();
+            for (int m : movable) order.add(m);
+            Collections.shuffle(order);
+
+            for (int mask : order) {
+                // Try a few times in case the first random step is blocked.
+                int tries = 6;
+                while (tries-- > 0) {
+                    if (moveObjectOneStepRandom(mask)) break;
+                }
             }
         }
 
@@ -268,6 +274,11 @@ public class Env extends Environment {
         private boolean moveObjectOneStepRandom(int mask) {
             Location cur = findObject(mask);
             if (cur == null) return false;
+            
+            for (int ag = 0; ag < NB_AGS; ag++){
+                Location a = getAgPos(ag);
+                if (a.x == cur.x && a.y == cur.y) return false;
+            }
 
             int[][] dirs = { {0,-1}, {0,1}, {-1,0}, {1,0} };
             List<int[]> options = new ArrayList<>();
@@ -331,7 +342,8 @@ public class Env extends Environment {
                     }
                     if (onOtherAgent) continue;
 
-                    boolean passable = isFree(nx, ny) || (nx == goal.x && ny == goal.y);
+                    // Agents can walk onto movable items. Block only obstacles, static objects, and the other agent.
+                    boolean passable = passableForAgent(nx, ny, agID);
                     if (!passable || closedList[nx][ny]) continue;
 
                     Node neighbor = new Node(nx, ny);
@@ -346,6 +358,39 @@ public class Env extends Environment {
             return null;
         }
 
+        /**
+         * Returns true if an agent may occupy (x,y).
+         * We allow standing on movable items (brush/key/code/color).
+         */
+        /**
+         * UPDATED: Returns true if an agent may occupy (x,y).
+         * Agents MUST be able to stand on the Door, Table, or Chair to interact with them.
+         */
+        private boolean passableForAgent(int x, int y, int agID) {
+            if (x < 0 || x >= getWidth() || y < 0 || y >= getHeight()) return false;
+
+            // Obstacles (walls) still block movement
+            if ((data[x][y] & OBSTACLE) != 0) return false;
+
+            // FIX: Static objects (DOOR, CHAIR, TABLE) no longer return false.
+            // This allows the A* pathfinder to reach the goal coordinates.
+
+            // Other agent still blocks to prevent collisions
+            for (int ag = 0; ag < NB_AGS; ag++) {
+                if (ag == agID) continue;
+                Location o = getAgPos(ag);
+                if (o.x == x && o.y == y) return false;
+            }
+
+            return true;
+        }
+
+        /**
+         * UPDATED: Used for moving items randomly.
+         * Items should not jump onto agents or static objects.
+         */
+       
+
         boolean moveAgentByDir(String dir, int agID) {
             try {
                 Location curr = getAgPos(agID);
@@ -356,14 +401,7 @@ public class Env extends Environment {
                 else if (dir.equals("left")) next.x--;
                 else if (dir.equals("right")) next.x++;
 
-                if (!isFree(next.x, next.y)) return false;
-
-                // cannot move onto other agent
-                for (int ag = 0; ag < NB_AGS; ag++) {
-                    if (ag == agID) continue;
-                    Location o = getAgPos(ag);
-                    if (o.x == next.x && o.y == next.y) return false;
-                }
+                if (!passableForAgent(next.x, next.y, agID)) return false;
 
                 setAgPos(agID, next);
                 return true;
@@ -384,10 +422,18 @@ public class Env extends Environment {
             if (item.equals("code"))  mask = CODE;
             if (item.equals("color")) mask = COLOR;
 
-            if (mask != 0 && hasObject(mask, loc.x, loc.y)) {
-                remove(mask, loc.x, loc.y);
-                inventory[agID].add(item);
-                return true;
+            if (mask == 0) return false;
+
+            Location objLoc = findObject(mask);
+
+            if (objLoc != null) {
+                int dist = Math.abs(objLoc.x -loc.x) + Math.abs(objLoc.y - loc.y);
+
+                if (dist <=1) {
+                    remove(mask,objLoc.x,objLoc.y);
+                    inventory[agID].add(item);
+                    return true;
+                }
             }
             return false;
         }
@@ -404,6 +450,12 @@ public class Env extends Environment {
             if (item.equals("color")) mask = COLOR;
 
             if (mask == 0) return false;
+
+            // keep at most one movable item per cell and never drop on static objects
+            int cell = data[loc.x][loc.y];
+
+            // if ((cell & (BRUSH | KEY | CODE | COLOR)) != 0) return false;
+            // if ((cell & (DOOR | CHAIR | TABLE)) != 0) return false;
 
             add(mask, loc.x, loc.y);
             inventory[agID].remove(item);
