@@ -409,15 +409,18 @@ public class Env extends Environment {
 
         boolean paintObject(String obj, int agID) {
             Location loc = getAgPos(agID);
-
-            if (obj.equals("table") && hasObject(TABLE, loc.x, loc.y)) {
-                tablePainted = true;
-                return true;
+            boolean hasBrush = inventory[agID].contains("brush") || inventory[agID].contains("b");
+            boolean hasColor = inventory[agID].contains("color") || inventory[agID].contains("cl");
+            if (hasBrush && hasColor){
+            if (obj.equals("table") || obj.equals("t") ) {
+                if (hasObject(TABLE, loc.x,loc.y)){tablePainted = true;
+                return true;}
             }
-            if (obj.equals("chair") && hasObject(CHAIR, loc.x, loc.y)) {
-                chairPainted = true;
-                return true;
+            if (obj.equals("chair") || obj.equals("ch")) {
+                if (hasObject(CHAIR,loc.x,loc.y)){chairPainted = true;
+                return true;}
             }
+        }
             return false;
         }
 

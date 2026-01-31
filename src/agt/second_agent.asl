@@ -2,6 +2,8 @@
 grid_size(5,5). 
 max_carry(3).
 
+object(t,table). object(ch,chair). object(d,door).
+object(cl,color). object(cd,code). object(b,brush). object(k,key).
 
 // MAPPING TASKS TO OBJECTS (CRITICAL FIX)
 task_item(open_door, d).
@@ -148,10 +150,8 @@ have(b) :- have(brush). have(k) :- have(key). have(cd) :- have(code). have(cl) :
     <- 
     !go_to(X,Y); 
     do(pick(Name)).
-+!go_to_obj(O) : at(O,X,Y) <- !go_to(X,Y);
-                             if (not at(O,X,Y)){
-                                !go_to_obj(O);
-                             }.
++!go_to_obj(O) : at(O,X,Y) <- !go_to(X,Y).
+                            
 
 +!go_to(X,Y) : pos(X,Y) <- true.
 +!go_to(X,Y) : pos(CX,CY) <- do(move(X,Y)); .wait(100); !go_to(X,Y).

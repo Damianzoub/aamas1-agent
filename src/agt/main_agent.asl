@@ -215,8 +215,3 @@ should_propose(U,Uo) :- U == Uo & priority.
 +!drop_list([H|T]) <- do(drop(H)); !drop_list(T).
 -!drop_list([H|T]) <- .print("Skipping drop for ",H," (alias problem or already dropped)");
                       !drop_list(T).
-
-have(b) :- have(brush).
-have(cd) :- have(code).
-have(cl) :- have(color).
-have(k) :- have(key).
