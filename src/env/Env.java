@@ -19,7 +19,7 @@ import jason.environment.grid.GridWorldModel;
 import jason.environment.grid.GridWorldView;
 import jason.environment.grid.Location;
 
-// RENAMED CLASS TO 'Env'
+
 public class Env extends Environment {
 
     // --- Bit Masks ---
@@ -31,7 +31,7 @@ public class Env extends Environment {
     public static final int COLOR  = 256;
     public static final int TABLE  = 512;
 
-    // agent names must match your .mas2j exactly
+    
     public static final int NB_AGS = 2;
     private static final String AG0 = "main_agent";
     private static final String AG1 = "second_agent";
@@ -379,10 +379,10 @@ public class Env extends Environment {
             Location loc = getAgPos(agID);
             int mask = 0;
 
-            if (item.equals("brush")) mask = BRUSH;
-            if (item.equals("key"))   mask = KEY;
-            if (item.equals("code"))  mask = CODE;
-            if (item.equals("color")) mask = COLOR;
+            if (item.equals("brush") || item.equals("b")) mask = BRUSH;
+            if (item.equals("key")   || item.equals("k")) mask = KEY;
+            if (item.equals("code")  || item.equals("cd")) mask = CODE;
+            if (item.equals("color") || item.equals("cl")) mask = COLOR;
 
             if (mask != 0 && hasObject(mask, loc.x, loc.y)) {
                 remove(mask, loc.x, loc.y);
@@ -399,9 +399,9 @@ public class Env extends Environment {
 
             int mask = 0;
             if (item.equals("brush")) mask = BRUSH;
-            if (item.equals("key"))   mask = KEY;
-            if (item.equals("code"))  mask = CODE;
-            if (item.equals("color")) mask = COLOR;
+            if (item.equals("key")   || item.equals("k")) mask = KEY;
+            if (item.equals("code")  || item.equals("cd")) mask = CODE;
+            if (item.equals("color") || item.equals("cl")) mask = COLOR;
 
             if (mask == 0) return false;
 
