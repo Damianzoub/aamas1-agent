@@ -144,10 +144,14 @@ should_propose(U,Uo) :- U == Uo & priority.
 +!paint(O) : needs_to_paint(O, Req) <- 
     !collect_all(Req); 
     !go_to_obj(O); 
+    ?at(O,X,Y);
+    ?pos(X,Y);
     do(paint(O)); 
     +colored(O); 
     !drop_all.
-
+-!paint(O) <- .print("Paint failed. Re-aligning with ",O);
+              !go_to_obj(O);
+              !paint(O).
 +!achieve_open(d) : door(open) <- true.
 +!achieve_open(d) : not door(open) <- !open(d).
 
@@ -193,6 +197,26 @@ should_propose(U,Uo) :- U == Uo & priority.
     .wait(100); 
     !go_to(X,Y).
 
+-!go_to(X,Y) <- .print("Movement Failed, retrying...");
+                .wait(200);
+                !go_to(X,Y).
+
+//Improved Pick Logic
++!pick_moving(Alias) : object(Alias,RealName) <- !go_to_obj(Alias);
+                                                 .print("Attempting to pick ", RealName);
+                                                 do(pick(RealName)).
+
+-!pick_moving(Alias) <- .print("Pick failed. Object likely moved. Re-locating...");
+                        .wait(300);
+                        !pick_moving(Alias).
+
 +!drop_all <- .findall(O, have(O), L); !drop_list(L).
 +!drop_list([]) <- true.
 +!drop_list([H|T]) <- do(drop(H)); !drop_list(T).
+-!drop_list([H|T]) <- .print("Skipping drop for ",H," (alias problem or already dropped)");
+                      !drop_list(T).
+
+have(b) :- have(brush).
+have(cd) :- have(code).
+have(cl) :- have(color).
+have(k) :- have(key).

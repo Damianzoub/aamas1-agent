@@ -251,13 +251,10 @@ public class Env extends Environment {
             // no agents
             for (int ag = 0; ag < NB_AGS; ag++) {
                 Location a = getAgPos(ag);
-                if (a.x == x && a.y == y) return false;
+                if (a != null  && a.x == x && a.y == y) return false;
             }
 
-            // no static objects
-            if ((data[x][y] & DOOR)  != 0) return false;
-            if ((data[x][y] & CHAIR) != 0) return false;
-            if ((data[x][y] & TABLE) != 0) return false;
+            
 
             // no other movable items (keep one item per cell)
             if ((data[x][y] & (BRUSH | KEY | CODE | COLOR)) != 0) return false;
