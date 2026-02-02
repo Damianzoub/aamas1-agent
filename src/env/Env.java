@@ -257,7 +257,7 @@ public class Env extends Environment {
             
 
             // no other movable items (keep one item per cell)
-            if ((data[x][y] & (BRUSH | KEY | CODE | COLOR)) != 0) return false;
+            //if ((data[x][y] & (BRUSH | KEY | CODE | COLOR)) != 0) return false;
 
             return true;
         }
@@ -328,7 +328,7 @@ public class Env extends Environment {
                     }
                     if (onOtherAgent) continue;
 
-                    boolean passable = isFree(nx, ny) || (nx == goal.x && ny == goal.y);
+                    boolean passable = (data[nx][ny] & OBSTACLE) == 0;
                     if (!passable || closedList[nx][ny]) continue;
 
                     Node neighbor = new Node(nx, ny);

@@ -24,6 +24,7 @@ other_agent(main_agent).
     !negotiate_then_maybe_do(open_door);
     !negotiate_then_maybe_do(paint_table);
     !negotiate_then_maybe_do(paint_chair);
+    !drop_all;
     .print("### AGENT 2 MISSION ENDED ###").
 
 // ===================== NEGOTIATION PROTOCOL =====================
@@ -124,8 +125,9 @@ have(b) :- have(brush). have(k) :- have(key). have(cd) :- have(code). have(cl) :
                                        ?at(O,X,Y);
                                        ?pos(X,Y);
                                        do(paint(O));
-                                       +colored(O);
-                                       !drop_all.
+                                       +colored(O).
+                                       
+                                       
 -!paint(O) <- .print("Paint failed. Re-aligning with ",O);
               !go_to_obj(O);
               !paint(O).
@@ -167,7 +169,7 @@ have(b) :- have(brush). have(k) :- have(key). have(cd) :- have(code). have(cl) :
                                                  do(pick(RealName)).
 
 -!pick_moving(Alias) <- .print("Pick failed. Object likely moved. Re-locating...");
-                        .wait(300);
+                        .wait(1000);
                         !pick_moving(Alias).
 
 

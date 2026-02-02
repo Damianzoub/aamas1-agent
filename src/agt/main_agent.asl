@@ -36,6 +36,7 @@ priority. // Main agent wins ties
     !negotiate_then_maybe_do(open_door);
     !negotiate_then_maybe_do(paint_table);
     !negotiate_then_maybe_do(paint_chair);
+    !drop_all;
     .print("### MISSION ACCOMPLISHED ###").
 
 // ===================== NEGOTIATION PROTOCOL =====================
@@ -147,8 +148,7 @@ should_propose(U,Uo) :- U == Uo & priority.
     ?at(O,X,Y);
     ?pos(X,Y);
     do(paint(O)); 
-    +colored(O); 
-    !drop_all.
+    +colored(O).
 -!paint(O) <- .print("Paint failed. Re-aligning with ",O);
               !go_to_obj(O);
               !paint(O).
@@ -207,7 +207,7 @@ should_propose(U,Uo) :- U == Uo & priority.
                                                  do(pick(RealName)).
 
 -!pick_moving(Alias) <- .print("Pick failed. Object likely moved. Re-locating...");
-                        .wait(300);
+                        .wait(200);
                         !pick_moving(Alias).
 
 +!drop_all <- .findall(O, have(O), L); !drop_list(L).
