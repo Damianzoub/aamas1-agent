@@ -1,7 +1,8 @@
+// === INITIAL CONFIGURATION ===
 grid_size(5,5). 
 max_carry(3).
 
-
+// Objects and Requirements
 object(t,table). object(ch,chair). object(d,door).
 object(cl,color). object(cd,code). object(b,brush). object(k,key).
 
@@ -9,19 +10,21 @@ needs_to_paint(t ,[b,cl]).
 needs_to_paint(ch, [b,cl]).
 needs_to_open(d, [k,cd]).
 
-// to not have problem with aliases
+// Aliases for checking inventory (CRITICAL FOR collect_all)
 have(b)  :- have(brush).
 have(k)  :- have(key).
 have(cd) :- have(code).
 have(cl) :- have(color).
 
-
+// MAPPING TASKS TO OBJECTS
 task_item(open_door, d).
 task_item(paint_table, t).
 task_item(paint_chair, ch).
 
+// BUNDLED TASK RULE: paint_table implies paint_chair
 painting_tasks([paint_table, paint_chair]).
 
+// Negotiation config 
 other_agent(second_agent).
 priority. // Main agent wins ties
 
@@ -53,13 +56,13 @@ priority. // Main agent wins ties
 
 // Handle negotiation outcome
 +!handle_outcome(Task) : owner(Task, me) <-
-    .print("I WON ", Task);
+    .print(">>> I WON ", Task);
     ?other_agent(OA);
     .send(OA, tell, taken(Task, me));  // Broadcast ownership
     !execute_task_with_bundling(Task).
 
 +!handle_outcome(Task) : owner(Task, other) <-
-    .print("OTHER AGENT WON ", Task).
+    .print(">>> OTHER AGENT WON ", Task).
 
 // Execute task, bundling paint_table with paint_chair
 +!execute_task_with_bundling(Task) : painting_tasks(PaintList) & .member(Task, PaintList) <-
@@ -73,10 +76,10 @@ priority. // Main agent wins ties
     .send(OA, tell, done(paint_table));
     !do_task(paint_chair);
     .send(OA, tell, done(paint_chair));
-    .print("PAINTING BUNDLE COMPLETED ***").
+    .print("*** PAINTING BUNDLE COMPLETED ***").
 
 +!execute_task_with_bundling(Task) : not (painting_tasks(PaintList) & .member(Task, PaintList)) <-
-    .print("EXECUTING ", Task, " ***");
+    .print("*** EXECUTING ", Task, " ***");
     !do_task(Task);
     ?other_agent(OA);
     .send(OA, tell, done(Task)).
@@ -90,7 +93,7 @@ priority. // Main agent wins ties
     // If painting was taken, mark it
     if (Task == paint_table | Task == paint_chair) {
         +painting_assigned_to_other;
-        .print("Painting bundle assigned to other agent, I will not negotiate paint tasks")
+        .print(">>> Painting bundle assigned to other agent, I will not negotiate paint tasks")
     }.
 
 // When other agent completes a task

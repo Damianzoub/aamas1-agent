@@ -1,40 +1,31 @@
+// === INITIAL CONFIGURATION ===
 grid_size(5,5). 
 max_carry(3).
-
 
 object(t,table). object(ch,chair). object(d,door).
 object(cl,color). object(cd,code). object(b,brush). object(k,key).
 
-needs_to_paint(t ,[b,cl]).
-needs_to_paint(ch, [b,cl]).
-needs_to_open(d, [k,cd]).
-
-// to not have problem with aliases
-have(b)  :- have(brush).
-have(k)  :- have(key).
-have(cd) :- have(code).
-have(cl) :- have(color).
-
-
+// MAPPING TASKS TO OBJECTS
 task_item(open_door, d).
 task_item(paint_table, t).
 task_item(paint_chair, ch).
 
+// BUNDLED TASK RULE: paint_table implies paint_chair
 painting_tasks([paint_table, paint_chair]).
 
-other_agent(second_agent).
-priority. // Main agent wins ties
+other_agent(main_agent).
+// Note: Agent 2 does NOT have the 'priority' belief.
 
 !start.
 
 +!start <- 
-    .print("Running Main Agent"); 
+    .print("Running Agent 2"); 
     !mission.
 
 // ===================== EVENT-DRIVEN MISSION LOGIC =====================
 
 +!mission <- 
-    .print("### MISSION STARTED ###");
+    .print("### AGENT 2 MISSION STARTED ###");
     !negotiate_and_claim(open_door);
     // After open_door is resolved, check if I should do painting
     if (not painting_assigned_to_other) {
@@ -43,7 +34,7 @@ priority. // Main agent wins ties
         .print("Painting assigned to other agent, my work is done")
     };
     !drop_all;
-    .print("### MISSION ACCOMPLISHED ###").
+    .print("### AGENT 2 MISSION ENDED ###").
 
 // ===================== NEGOTIATION WITH TASK CLAIMING =====================
 
@@ -53,13 +44,13 @@ priority. // Main agent wins ties
 
 // Handle negotiation outcome
 +!handle_outcome(Task) : owner(Task, me) <-
-    .print("I WON ", Task);
+    .print(">>> I WON ", Task);
     ?other_agent(OA);
     .send(OA, tell, taken(Task, me));  // Broadcast ownership
     !execute_task_with_bundling(Task).
 
 +!handle_outcome(Task) : owner(Task, other) <-
-    .print("OTHER AGENT WON ", Task).
+    .print(">>> OTHER AGENT WON ", Task).
 
 // Execute task, bundling paint_table with paint_chair
 +!execute_task_with_bundling(Task) : painting_tasks(PaintList) & .member(Task, PaintList) <-
@@ -73,10 +64,10 @@ priority. // Main agent wins ties
     .send(OA, tell, done(paint_table));
     !do_task(paint_chair);
     .send(OA, tell, done(paint_chair));
-    .print("PAINTING BUNDLE COMPLETED ***").
+    .print("*** PAINTING BUNDLE COMPLETED ***").
 
 +!execute_task_with_bundling(Task) : not (painting_tasks(PaintList) & .member(Task, PaintList)) <-
-    .print("EXECUTING ", Task, " ***");
+    .print("*** EXECUTING ", Task, " ***");
     !do_task(Task);
     ?other_agent(OA);
     .send(OA, tell, done(Task)).
@@ -90,7 +81,7 @@ priority. // Main agent wins ties
     // If painting was taken, mark it
     if (Task == paint_table | Task == paint_chair) {
         +painting_assigned_to_other;
-        .print("Painting bundle assigned to other agent, I will not negotiate paint tasks")
+        .print(">>> Painting bundle assigned to other agent, I will not negotiate paint tasks")
     }.
 
 // When other agent completes a task
@@ -115,8 +106,8 @@ priority. // Main agent wins ties
     !decide_proposal(Task, N, U, Uo).
 
 +!negotiate(Task, N) : N >= 15 <-
-    .print("Negotiation timeout for ", Task, ", taking by default");
-    +owner(Task, me).
+    .print("Negotiation timeout for ", Task, ", giving up");
+    +owner(Task, other).
 
 // Decision: should I propose?
 +!decide_proposal(Task, N, U, Uo) : should_propose(U, Uo) <-
@@ -127,8 +118,8 @@ priority. // Main agent wins ties
 +!decide_proposal(Task, N, U, Uo) : not should_propose(U, Uo) <-
     !wait_proposal(Task, N).
 
+// Agent 2 only proposes if strictly greater (no priority tie-breaker)
 should_propose(U, Uo) :- U > Uo.
-should_propose(U, Uo) :- U == Uo & priority.
 
 // ===================== WAIT STATES (WITH ABORT CONDITIONS) =====================
 
@@ -184,12 +175,12 @@ should_propose(U, Uo) :- U == Uo & priority.
     .print("Received proposal for taken task ", Task, ", auto-accepting");
     .send(Other, tell, accept(Task)).
 
-+propose(Task)[source(Other)] : myu(Task, U) & otheru(Task, Uo) & (Uo > U) <-
++propose(Task)[source(Other)] : myu(Task, U) & otheru(Task, Uo) & (Uo >= U) <-
     .send(Other, tell, accept(Task));
     -+decided(Task, other);
     -+owner(Task, other).
 
-+propose(Task)[source(Other)] : myu(Task, U) & otheru(Task, Uo) & not (Uo > U) <-
++propose(Task)[source(Other)] : myu(Task, U) & otheru(Task, Uo) & not (Uo >= U) <-
     .send(Other, tell, reject(Task));
     -+decided(Task, restart).
 
@@ -222,17 +213,25 @@ should_propose(U, Uo) :- U == Uo & priority.
 +!do_task(paint_table) <- !achieve_colored(t).
 +!do_task(paint_chair) <- !achieve_colored(ch).
 
-// --- ACTION LOGIC ---
+// Action Logic
+needs_to_paint(t, [b, cl]). 
+needs_to_paint(ch, [b, cl]). 
+needs_to_open(d, [k, cd]).
+
+have(b) :- have(brush). 
+have(k) :- have(key). 
+have(cd) :- have(code). 
+have(cl) :- have(color).
 
 +!achieve_colored(O) : colored(O) <- true.
 +!achieve_colored(O) : not colored(O) <- !paint(O).
 
 +!paint(O) : needs_to_paint(O, Req) <- 
     !collect_all(Req); 
-    !go_to_obj(O); 
+    !go_to_obj(O);
     ?at(O, X, Y);
     ?pos(X, Y);
-    do(paint(O)); 
+    do(paint(O));
     +colored(O).
 
 -!paint(O) <- 
@@ -269,14 +268,10 @@ should_propose(U, Uo) :- U == Uo & priority.
 
 +!go_to_obj(O) : at(O, X, Y) <- !go_to(X, Y).
 
-+!go_to(X, Y) : pos(X, Y) <- .print("Arrived at ", X, ",", Y).
++!go_to(X, Y) : pos(X, Y) <- true.
 
 +!go_to(X, Y) : pos(CX, CY) <- 
     do(move(X, Y)); 
-    .wait(100);
-    !go_to(X, Y).
-
-+!go_to(X, Y) : not pos(_, _) <- 
     .wait(100); 
     !go_to(X, Y).
 
@@ -292,12 +287,10 @@ should_propose(U, Uo) :- U == Uo & priority.
 
 -!pick_moving(Alias) <- 
     .print("Pick failed. Object likely moved. Re-locating...");
-    .wait(200);
+    .wait(1000);
     !pick_moving(Alias).
 
 +!drop_all <- .findall(O, have(O), L); !drop_list(L).
 +!drop_list([]) <- true.
 +!drop_list([H|T]) <- do(drop(H)); !drop_list(T).
--!drop_list([H|T]) <- 
-    .print("Skipping drop for ", H, " (alias problem or already dropped)");
-    !drop_list(T).
+-!drop_list([H|T]) <- !drop_list(T).
