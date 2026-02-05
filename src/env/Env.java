@@ -77,16 +77,12 @@ public class Env extends Environment {
                 result = model.pickItem(item, agID);
             } else if (actFunctor.equals("paint")) {
                 String target = action.getTerm(0).toString();
-                if (model.hasItem("brush", agID) && model.hasItem("color", agID)) {
-                    result = model.paintObject(target, agID);
-                    if (result) reward += 1.0;
-                }
+                result = model.paintObject(target, agID);
+                if (result) reward +=1.0;
             } else if (actFunctor.equals("open")) {
                 String target = action.getTerm(0).toString();
-                if (model.hasItem("key", agID) && model.hasItem("code", agID)) {
-                    result = model.openObject(target, agID);
-                    if (result) reward += 0.8;
-                }
+                result = model.openObject(target, agID);
+                if (result) reward +=0.8;
             } else if (actFunctor.equals("drop")) {
                 String item = action.getTerm(0).toString();
                 result = model.dropItem(item, agID);
@@ -113,8 +109,8 @@ public class Env extends Environment {
             logger.info(agName + " doing: " + action + " | Reward: " + reward);
             if (view != null) view.repaint();
             updatePercepts();
-            try { Thread.sleep(250); } catch (Exception e) {}
             informAgsEnvironmentChanged();
+            try { Thread.sleep(250); } catch (Exception e) {}
         }
         return result;
     }
@@ -136,8 +132,8 @@ public class Env extends Environment {
         }
 
         // global task-state percepts (same for everyone)
-        if (model.tablePainted) addPercept(Literal.parseLiteral("colored(table)"));
-        if (model.chairPainted) addPercept(Literal.parseLiteral("colored(chair)"));
+        if (model.tablePainted) addPercept(Literal.parseLiteral("colored(t)"));
+        if (model.chairPainted) addPercept(Literal.parseLiteral("colored(ch)"));
         if (model.doorOpen)     addPercept(Literal.parseLiteral("door(open)"));
 
         // global object locations (same for everyone)
@@ -187,13 +183,54 @@ public class Env extends Environment {
                 add(COLOR, 4, 0);
 
                 // Put chair NOT on (3,3) because agent2 starts there.
-                add(CHAIR, 2, 3);
-                add(DOOR,  2, 4);
-                add(TABLE, 4, 4);
+                Location chairLoc = getRandomFreeLocation();
+                add(CHAIR,chairLoc.x,chairLoc.y);
+                Location doorLoc = getRandomFreeLocation();
+                add(DOOR,doorLoc.x,doorLoc.y);
+                Location tableLoc = getRandomFreeLocation();
+                add(TABLE,tableLoc.x,tableLoc.y);
 
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        } 
+        
+        private Location getRandomFreeLocation() throws Exception {
+            List<Location> freeCells = new ArrayList<>();
+        
+            for (int x = 0; x < getWidth(); x++) {
+                for (int y = 0; y < getHeight(); y++) {
+                    // Check for Walls/Obstacles
+                    if ((data[x][y] & OBSTACLE) != 0) continue;
+        
+                    // Check for Movable Items (Brush, Key, Code, Color)
+                    if ((data[x][y] & (BRUSH | KEY | CODE | COLOR)) != 0) continue;
+                    
+                    // Check for already placed static objects (Chair, Door, Table)
+                    if ((data[x][y] & (CHAIR | DOOR | TABLE)) != 0) continue;
+        
+                    // Check for Agents
+                    boolean agentPresent = false;
+                    for (int ag = 0; ag < NB_AGS; ag++) {
+                        Location aPos = getAgPos(ag);
+                        if (aPos != null && aPos.x == x && aPos.y == y) {
+                            agentPresent = true;
+                            break;
+                        }
+                    }
+        
+                    if (!agentPresent) {
+                        freeCells.add(new Location(x, y));
+                    }
+                }
+            }
+        
+            if (freeCells.isEmpty()) {
+                throw new Exception("No free cells available for object placement!");
+            }
+        
+            Collections.shuffle(freeCells);
+            return freeCells.get(0);
         }
 
         public int getGridData(int x, int y) { return data[x][y]; }
@@ -374,6 +411,10 @@ public class Env extends Environment {
             if (inventory[agID].size() >= 3) return false;
 
             Location loc = getAgPos(agID);
+            if (item.equals("b"))  item = "brush";
+            if (item.equals("k"))  item = "key";
+            if (item.equals("cd")) item = "code";
+            if (item.equals("cl")) item = "color";
             int mask = 0;
 
             if (item.equals("brush") || item.equals("b")) mask = BRUSH;
@@ -409,8 +450,8 @@ public class Env extends Environment {
 
         boolean paintObject(String obj, int agID) {
             Location loc = getAgPos(agID);
-            boolean hasBrush = inventory[agID].contains("brush") || inventory[agID].contains("b");
-            boolean hasColor = inventory[agID].contains("color") || inventory[agID].contains("cl");
+            boolean hasBrush = hasItem("brush",agID);
+            boolean hasColor = hasItem("color",agID);
             if (hasBrush && hasColor){
             if (obj.equals("table") || obj.equals("t") ) {
                 if (hasObject(TABLE, loc.x,loc.y)){tablePainted = true;
@@ -426,16 +467,41 @@ public class Env extends Environment {
 
         boolean openObject(String obj, int agID) {
             Location loc = getAgPos(agID);
-            if (obj.equals("door") && hasObject(DOOR, loc.x, loc.y)) {
+            if (!obj.equals("door"))
+                return false;
+        
+            // optional: idempotent door
+            if (doorOpen)
+                return true;
+        
+            // require key+code here if you want
+            if (!hasItem("key", agID) || !hasItem("code", agID))
+                return false;
+        
+            if (hasObject(DOOR, loc.x, loc.y)) {
                 doorOpen = true;
                 return true;
             }
             return false;
         }
+        
 
         boolean hasItem(String item, int agID) {
+            if (item.equals("brush")) {
+                return inventory[agID].contains("brush") || inventory[agID].contains("b");
+            }
+            if (item.equals("color")) {
+                return inventory[agID].contains("color") || inventory[agID].contains("cl");
+            }
+            if (item.equals("key")) {
+                return inventory[agID].contains("key") || inventory[agID].contains("k");
+            }
+            if (item.equals("code")) {
+                return inventory[agID].contains("code") || inventory[agID].contains("cd");
+            }
             return inventory[agID].contains(item);
         }
+        
     }
 
     // --- VIEW ---

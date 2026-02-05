@@ -1,20 +1,24 @@
-grid_size(5,5). 
+grid_size(5,5).
 max_carry(3).
-
 
 object(t,table). object(ch,chair). object(d,door).
 object(cl,color). object(cd,code). object(b,brush). object(k,key).
 
-needs_to_paint(t ,[b,cl]).
-needs_to_paint(ch, [b,cl]).
-needs_to_open(d, [k,cd]).
+needs_to_paint(t, [b, cl]).
+needs_to_paint(ch, [b, cl]).
+needs_to_open(d, [k, cd]).
 
-// to not have problem with aliases
 have(b)  :- have(brush).
 have(k)  :- have(key).
 have(cd) :- have(code).
 have(cl) :- have(color).
-
+alias_real(t, table).
+alias_real(ch, chair).
+alias_real(d, door).
+alias_real(k, key).
+alias_real(cd, code).
+alias_real(b, brush).
+alias_real(cl, color).
 
 task_item(open_door, d).
 task_item(paint_table, t).
@@ -23,25 +27,26 @@ task_item(paint_chair, ch).
 painting_tasks([paint_table, paint_chair]).
 
 other_agent(second_agent).
-priority. // Main agent wins ties
+priority.
 
 !start.
 
-+!start <- 
-    .print("Running Main Agent"); 
++!start <-
+    .print("Running Main Agent");
     !mission.
 
 // ===================== EVENT-DRIVEN MISSION LOGIC =====================
 
-+!mission <- 
++!mission <-
     .print("### MISSION STARTED ###");
     !negotiate_and_claim(open_door);
-    // After open_door is resolved, check if I should do painting
+
     if (not painting_assigned_to_other) {
-        !negotiate_and_claim(paint_table)  // This will bundle paint_chair
+        !negotiate_and_claim(paint_table)
     } else {
         .print("Painting assigned to other agent, my work is done")
     };
+
     !drop_all;
     .print("### MISSION ACCOMPLISHED ###").
 
@@ -51,56 +56,52 @@ priority. // Main agent wins ties
     !negotiate(Task, 0);
     !handle_outcome(Task).
 
-// Handle negotiation outcome
 +!handle_outcome(Task) : owner(Task, me) <-
     .print("I WON ", Task);
     ?other_agent(OA);
-    .send(OA, tell, taken(Task, me));  // Broadcast ownership
+    .send(OA, tell, taken(Task, me));
     !execute_task_with_bundling(Task).
 
 +!handle_outcome(Task) : owner(Task, other) <-
     .print("OTHER AGENT WON ", Task).
 
-// Execute task, bundling paint_table with paint_chair
 +!execute_task_with_bundling(Task) : painting_tasks(PaintList) & .member(Task, PaintList) <-
     .print("*** EXECUTING BUNDLED PAINTING TASKS ***");
     ?other_agent(OA);
-    // Claim ALL painting tasks at once
     .send(OA, tell, taken(paint_table, me));
     .send(OA, tell, taken(paint_chair, me));
-    +i_am_painter;  // Mark myself as the painter
+    +i_am_painter;
+
     !do_task(paint_table);
     .send(OA, tell, done(paint_table));
+
     !do_task(paint_chair);
     .send(OA, tell, done(paint_chair));
-    .print("PAINTING BUNDLE COMPLETED ***").
+
+    .print("*** PAINTING BUNDLE COMPLETED ***").
 
 +!execute_task_with_bundling(Task) : not (painting_tasks(PaintList) & .member(Task, PaintList)) <-
-    .print("EXECUTING ", Task, " ***");
+    .print("*** EXECUTING ", Task, " ***");
     !do_task(Task);
     ?other_agent(OA);
     .send(OA, tell, done(Task)).
 
-// ===================== RECEIVING TASK ASSIGNMENTS (EVENT-DRIVEN) =====================
+// ===================== RECEIVING TASK ASSIGNMENTS =====================
 
-// When other agent takes a task, remove it from my consideration
 +taken(Task, Agent)[source(Agent)] <-
     .print("Received: ", Agent, " took ", Task);
     +owner(Task, other);
-    // If painting was taken, mark it
     if (Task == paint_table | Task == paint_chair) {
         +painting_assigned_to_other;
         .print("Painting bundle assigned to other agent, I will not negotiate paint tasks")
     }.
 
-// When other agent completes a task
 +done(Task)[source(Agent)] <-
     .print("Received: ", Agent, " completed ", Task);
     +task_completed(Task).
 
-// ===================== NEGOTIATION PROTOCOL (SIMPLIFIED, NO DEADLOCK) =====================
+// ===================== NEGOTIATION PROTOCOL =====================
 
-// Skip negotiation if task already taken
 +!negotiate(Task, N) : owner(Task, other) <-
     .print("Task ", Task, " already taken by other, skipping negotiation").
 
@@ -118,7 +119,6 @@ priority. // Main agent wins ties
     .print("Negotiation timeout for ", Task, ", taking by default");
     +owner(Task, me).
 
-// Decision: should I propose?
 +!decide_proposal(Task, N, U, Uo) : should_propose(U, Uo) <-
     ?other_agent(OA);
     .send(OA, tell, propose(Task));
@@ -130,7 +130,7 @@ priority. // Main agent wins ties
 should_propose(U, Uo) :- U > Uo.
 should_propose(U, Uo) :- U == Uo & priority.
 
-// ===================== WAIT STATES (WITH ABORT CONDITIONS) =====================
+// ===================== WAIT STATES =====================
 
 +!wait_other_inform(Task) : otheru(Task, _) <- true.
 +!wait_other_inform(Task) : owner(Task, other) <-
@@ -165,10 +165,9 @@ should_propose(U, Uo) :- U == Uo & priority.
 
 // ===================== MESSAGE HANDLERS =====================
 
-// Respond to utility requests - ALWAYS respond even if task taken
 +inform(Task, Uo)[source(Other)] : owner(Task, other) <-
     .print("Received inform for taken task ", Task, ", sending low utility");
-    .send(Other, tell, inform(Task, -999)).  // Signal task is unavailable
+    .send(Other, tell, inform(Task, -999)).
 
 +inform(Task, Uo)[source(Other)] : myu(Task, _) <-
     -+otheru(Task, Uo).
@@ -179,7 +178,6 @@ should_propose(U, Uo) :- U == Uo & priority.
     -+myu(Task, U);
     .send(Other, tell, inform(Task, U)).
 
-// Respond to proposals
 +propose(Task)[source(Other)] : owner(Task, other) <-
     .print("Received proposal for taken task ", Task, ", auto-accepting");
     .send(Other, tell, accept(Task)).
@@ -204,100 +202,125 @@ should_propose(U, Uo) :- U == Uo & priority.
 
 +!compute_utility(Task, U) <- !my_utility(Task, U).
 
-+!my_utility(Task, U) 
-    : task_item(Task, Obj) & at(Obj, TX, TY) & pos(X, Y) 
-    <- !manhattan(X, Y, TX, TY, D); U = 100 - D.
++!my_utility(Task, U)
+    : task_item(Task, Obj) & at(Obj, TX, TY) & pos(X, Y)
+<-  !manhattan(X, Y, TX, TY, D);
+    U = 100 - D.
+
 +!my_utility(Task, 0).
 
-+!manhattan(X1, Y1, X2, Y2, D) <- 
-    DX = X1 - X2; DY = Y1 - Y2; 
-    !abs(DX, ADX); !abs(DY, ADY); 
++!manhattan(X1, Y1, X2, Y2, D) <-
+    DX = X1 - X2; DY = Y1 - Y2;
+    !abs(DX, ADX); !abs(DY, ADY);
     D = ADX + ADY.
 
 +!abs(N, A) : N >= 0 <- A = N.
 +!abs(N, A) : N < 0 <- A = -N.
 
-// Task Execution Wrappers
-+!do_task(open_door) <- !achieve_open(d).
+// ===================== TASK EXECUTION =====================
+
++!do_task(open_door)   <- !achieve_open(d).
 +!do_task(paint_table) <- !achieve_colored(t).
 +!do_task(paint_chair) <- !achieve_colored(ch).
 
-// --- ACTION LOGIC ---
+
 
 +!achieve_colored(O) : colored(O) <- true.
 +!achieve_colored(O) : not colored(O) <- !paint(O).
 
-+!paint(O) : needs_to_paint(O, Req) <- 
+// Low-level paint: idempotent + uses needs_to_paint
++!paint(O) : colored(O) <- true.
++!paint(O) : not colored(O) & needs_to_paint(O, Req) <- 
     !collect_all(Req); 
-    !go_to_obj(O); 
-    ?at(O, X, Y);
-    ?pos(X, Y);
-    do(paint(O)); 
-    +colored(O).
-
--!paint(O) <- 
-    .print("Paint failed. Re-aligning with ", O);
     !go_to_obj(O);
-    !paint(O).
+    do(paint(O)).      
+
+// Negative plan: log and stop (or limit retries with a counter)
+-!paint(O) : colored(O) <- true.
+-!paint(O) : not colored(O) <- 
+    .print("Paint failed for ", O, " giving up for now").
+
 
 +!achieve_open(d) : door(open) <- true.
 +!achieve_open(d) : not door(open) <- !open(d).
 
-+!open(d) : needs_to_open(d, Req) <- 
-    !collect_all(Req); 
-    !go_to_obj(d); 
-    do(open(door)); 
-    +door(open); 
++!open(d) : door(open) <- true.
++!open(d) : not door(open) & needs_to_open(d, Req) <-
+    !collect_all(Req);
+    !go_to_obj(d);
+    do(open(door));
+    +door(open);
     !drop_all.
+    
+-!open(d) : door(open) <- true.
+-!open(d) <-
+    .print("Open failed. Re-trying...").
 
 +!collect_all([]) <- true.
 +!collect_all([H|T]) : have(H) <- !collect_all(T).
 +!collect_all([H|T]) : not have(H) <- !pick_moving(H); !collect_all(T).
 
-+!pick_moving(Alias) 
-    : at(Alias, X, Y) & object(Alias, RealName) 
-    <- 
-    !go_to(X, Y); 
-    .print("Picking ", RealName, " (alias: ", Alias, ")");
-    do(pick(RealName)).
+// ===================== FIXED PICK (ONE PLAN ONLY) =====================
 
-+!pick_moving(Name) 
-    : at(Name, X, Y) 
-    <- 
-    !go_to(X, Y); 
-    do(pick(Name)).
++!pick_moving(Alias)
+    : alias_real(Alias, RealName)
+<-
+    ?at(Alias, X, Y);
+    !go_to(X, Y);
+    .print("Picking ", RealName, " (alias: ", Alias, ")");
+    do(pick(Alias)).
+
+-!pick_moving(Alias) <-
+    .print("Pick failed. Item likely moved. Re-locating...");
+    .wait(200);
+    !pick_moving(Alias).
+
+
+// ===================== FIXED MOVEMENT (GUARDED) =====================
 
 +!go_to_obj(O) : at(O, X, Y) <- !go_to(X, Y).
 
-+!go_to(X, Y) : pos(X, Y) <- .print("Arrived at ", X, ",", Y).
++!go_to(X, Y) : pos(X, Y) <- true.
 
-+!go_to(X, Y) : pos(CX, CY) <- 
-    do(move(X, Y)); 
-    .wait(100);
++!go_to(X, Y) : pos(CX, CY) & not (CX == X & CY == Y) <-
+    do(move(X, Y));
+    .wait(120);
     !go_to(X, Y).
 
-+!go_to(X, Y) : not pos(_, _) <- 
-    .wait(100); 
-    !go_to(X, Y).
-
--!go_to(X, Y) <- 
-    .print("Movement Failed, retrying...");
+-!go_to(X, Y) <-
+    .print("Movement failed, retrying go_to(", X, ",", Y, ")");
     .wait(200);
     !go_to(X, Y).
 
-+!pick_moving(Alias) : object(Alias, RealName) <- 
-    !go_to_obj(Alias);
-    .print("Attempting to pick ", RealName);
-    do(pick(RealName)).
+// ===================== LEAVE OBJECT CELL (AVOID BLOCKING) =====================
 
--!pick_moving(Alias) <- 
-    .print("Pick failed. Object likely moved. Re-locating...");
-    .wait(200);
-    !pick_moving(Alias).
+// ===================== LEAVE OBJECT CELL (DOM-safe, no 'true' step) =====================
+
++!leave_obj(O) : at(O, OX, OY) & pos(OX, OY) & grid_size(W, H) <-
+    // Try four neighbors; each attempt is guarded so it only executes if in-bounds.
+    !try_leave_step(OX, OY,  1, 0, W, H);
+    !try_leave_step(OX, OY, -1, 0, W, H);
+    !try_leave_step(OX, OY,  0, 1, W, H);
+    !try_leave_step(OX, OY,  0,-1, W, H).
+
++!leave_obj(O) <- .print("leave_obj: not on object or no location; skipping").
+
++!try_leave_step(OX, OY, DX, DY, W, H)
+    : pos(OX, OY)
+    & NX = OX + DX
+    & NY = OY + DY
+    & NX >= 0 & NX < W
+    & NY >= 0 & NY < H
+<-
+    do(move(NX, NY)).
+
++!try_leave_step(OX, OY, DX, DY, W, H) <- true.
+
+
+
+// ===================== DROP =====================
 
 +!drop_all <- .findall(O, have(O), L); !drop_list(L).
 +!drop_list([]) <- true.
 +!drop_list([H|T]) <- do(drop(H)); !drop_list(T).
--!drop_list([H|T]) <- 
-    .print("Skipping drop for ", H, " (alias problem or already dropped)");
-    !drop_list(T).
+-!drop_list([H|T]) <- !drop_list(T).
