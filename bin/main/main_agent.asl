@@ -22,17 +22,6 @@ needs_to_paint(t ,[b,cl]).
 needs_to_paint(ch, [b,cl]).
 needs_to_open(d, [k,cd]).
 //Initial locations of movable objects
-at(b,1,5).   // Brush
-at(k,1,4).   // Key
-at(cd,3,5).  // Code
-at(cl,5,5).  // Color
-
-//Initial locations of T, Ch, D (static version)
-//Later, to make the system dynamic, these will come from percepts
-at(ch,4,2).   //Chair
-at(d,3,1).    //Door
-at(t,5,1).    //Table
-
 
 
 //Walls location

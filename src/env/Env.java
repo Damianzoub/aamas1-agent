@@ -9,7 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.logging.Logger;
-
+import java.util.Random;
 import jason.asSyntax.Literal;
 import jason.asSyntax.NumberTerm;
 import jason.asSyntax.Structure;
@@ -151,6 +151,7 @@ public class Env extends Environment {
         public boolean chairPainted = false;
         public boolean doorOpen = false;
         private int stepCount =0;
+        private final Random rnd = new Random();
         private static final int DYN_PERIOD =3;
 
         public MyGridModel() {
@@ -161,7 +162,9 @@ public class Env extends Environment {
                 add(OBSTACLE, 1, 4); add(OBSTACLE, 1, 3);
                 add(OBSTACLE, 3, 0); add(OBSTACLE, 3, 1);
                 add(BRUSH, 0, 0); add(KEY, 0, 1); add(CODE, 2, 0); add(COLOR, 4, 0);
-                add(CHAIR, 3, 3); add(DOOR, 2, 4); add(TABLE, 4, 4);
+                placehRandomTarget(DOOR);
+                placehRandomTarget(CHAIR);
+                placehRandomTarget(TABLE);
             } catch (Exception e) { e.printStackTrace(); }
         }
 
@@ -202,6 +205,33 @@ public class Env extends Environment {
                 if(moveObjectOneStepRandom(mask)) break;
             }
         }
+        //randomizing putting chair,table,door
+        private boolean cellFreeForTargets(int x, int y){
+            //inside grid
+            if (x < 0 || x >= getWidth() || y < 0 || y >= getHeight()) return false;
+            //avoid obstacles
+            if ((data[x][y] & OBSTACLE) != 0) return false;
+            //avoid items (brush,code,key,color)
+            if ((data[x][y] & (BRUSH | KEY | CODE | COLOR)) != 0) return false;
+            //avoid already placed targets
+            if ((data[x][y] & (DOOR | CHAIR | TABLE)) != 0) return false;
+            
+            Location a = getAgPos(0);
+            if (a.x == x && a.y == y) return false;
+            return true;
+        }
+        // try the placement more than one time to guarantee that all objects will be placed
+        private void placehRandomTarget(int mask){
+            for (int tries=0; tries < 100; tries++){
+                int x = rnd.nextInt(getWidth());
+                int y=  rnd.nextInt(getHeight());
+                if (cellFreeForTargets(x, y)){
+                    add(mask,x,y);
+                    return;
+                }
+            }
+            throw new RuntimeException("Could not placed item");
+        }
 
         private Location findObject(int mask){
             for (int x =0; x < getWidth(); x++){
@@ -211,7 +241,7 @@ public class Env extends Environment {
             }
             return null;
         }
-
+        
         private boolean cellOk(int x ,int y){
             if (x <0 || x >=getWidth() || y < 0 || y >= getHeight()) return false;
             // not above in an obstacle
