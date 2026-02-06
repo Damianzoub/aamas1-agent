@@ -2,6 +2,6 @@ MAS aamas1 {
   infrastructure: Centralised
   environment: Env
   executionControl: jason.control.ExecutionControlGUI
-  agents: main_agent; second_agent;
+  agents: main_agent;
   aslSourcePath: "src/agt";
 }
