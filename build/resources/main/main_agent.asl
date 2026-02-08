@@ -1,6 +1,8 @@
-+!start <-.print("Running Main Agent"); 
-         !mission;
-         .print("Main Agent Finished").
++!start <- .print("Agent started");
+    !calculate_utilities;
+    !negotiate_all_jobs;
+    !execute_assignments;
+    .print("Agent finished").
 !start.
 
 grid_size(5,5).       //5x5 grid
@@ -168,3 +170,172 @@ compatible(d).
 
 //Incompatible if we carry something that is not declared compatible
 incompatible(O) :- not compatible(O) & have(O).
+
++!abs(N,A) : N >= 0 <- A = N.
++!abs(N,A) : N < 0 <- A = -N.
+
+
+// Triggered once at agent initialization
++!calculate_utilities <-
+    // Get current position
+    ?pos(MyX, MyY);
+    
+    // Get object positions
+    ?at(d, DoorX, DoorY);
+    ?at(t, TableX, TableY);
+    ?at(ch, ChairX, ChairY);
+    
+    // Calculate open_job utility (manhattan to door)
+    DiffDoorX = MyX - DoorX;
+    DiffDoorY = MyY - DoorY;
+    !abs(DiffDoorX, AbsDoorX);
+    !abs(DiffDoorY, AbsDoorY);
+    OpenUtil = AbsDoorX + AbsDoorY;
+    +job_utility(open_job, OpenUtil);
+    
+    // Calculate paint_job utility (average manhattan to table and chair)
+    DiffTableX = MyX - TableX;
+    DiffTableY = MyY - TableY;
+    !abs(DiffTableX, AbsTableX);
+    !abs(DiffTableY, AbsTableY);
+    TableDist = AbsTableX + AbsTableY;
+    
+    DiffChairX = MyX - ChairX;
+    DiffChairY = MyY - ChairY;
+    !abs(DiffChairX, AbsChairX);
+    !abs(DiffChairY, AbsChairY);
+    ChairDist = AbsChairX + AbsChairY;
+    
+    PaintUtil = (TableDist + ChairDist) / 2;
+    +job_utility(paint_job, PaintUtil);
+    
+    +utilities_calculated;
+    .print("Utilities calculated: open_job=", OpenUtil, ", paint_job=", PaintUtil).
+
++!wait_for_other_agent <- .my_name(Me); 
+    if (Me == main_agent){
+        +ready;
+        .send(second_agent,tell,agent_ready);
+        !wait_for_ready;
+    }else{
+        +ready;
+        .send(main_agent,tell,agent_ready);
+        !wait_for_ready;
+    }.
+
++agent_ready <- +other_ready.
++!wait_for_ready <- .wait(50); !wait_for_ready.
+
+// Main negotiation coordinator
++!negotiate_all_jobs <-
+    .print("Starting job negotiation");
+    ?job_utility(open_job,OpenUtil);
+    ?job_utility(paint_job,PaintUtil);
+    .my_name(Me);
+    if (Me == main_agent){
+        .send(second_agent,tell,all_utilities(OpenUtil,PaintUtil,Me));
+    }else{
+        .send(main_agent,tell,all_utilities(OpenUtil,PaintUtil,Me));
+    };
+    !wait_for_all_utilities;
+    !decide_all_jobs;
+    +negotiation_complete;
+    .print("Negotiation complete").
+
++!wait_for_all_utilities : all_utilities(_,_,_) <- true.
++!wait_for_all_utilities <- .wait(50); !wait_for_all_utilities.
+
+//decide all jobs (FIXED LOGIC)
++!decide_all_jobs <-  
+    ?job_utility(open_job,MyOpenUtil);
+    ?job_utility(paint_job,MyPaintUtil);
+    ?all_utilities(OtherOpenUtil,OtherPaintUtil,OtherAgent);
+    .my_name(Me);
+    
+    if (Me == main_agent){
+        //main_agent perspective: wins if equal or better (<=)
+        
+        // Decide open_job
+        if (MyOpenUtil >= OtherOpenUtil){
+            // My utility <= other's utility means I'm closer or equal
+            !assign_job_to_me(open_job);
+            +job_winner(open_job,main_agent);
+            .print("Assigned open_job: [open_door]");
+        }else{
+            // Other agent is strictly better
+            +job_winner(open_job,second_agent);
+            .print("open_job assigned to second_agent");
+        };
+
+        // Decide paint_job
+        if (MyPaintUtil >= OtherPaintUtil){
+            // My utility <= other's utility means I'm closer or equal
+            !assign_job_to_me(paint_job);
+            +job_winner(paint_job,main_agent);
+            .print("Assigned paint_job: [paint_table, paint_chair]");
+        }else{
+            // Other agent is strictly better
+            +job_winner(paint_job,second_agent);
+            .print("paint_job assigned to second_agent");
+        };
+    }else{
+        // second_agent perspective: only wins if STRICTLY better (<)
+        
+        // Decide open_job
+        if (MyOpenUtil < OtherOpenUtil) {
+            // I'm STRICTLY better (lower distance)
+            !assign_job_to_me(open_job);
+            +job_winner(open_job, second_agent);
+            .print("Assigned open_job: [open_door]");
+        } else {
+            // main_agent wins (equal or better)
+            +job_winner(open_job, main_agent);
+            .print("open_job assigned to main_agent");
+        };
+        
+        // Decide paint_job
+        if (MyPaintUtil < OtherPaintUtil) {
+            // I'm STRICTLY better (lower distance)
+            !assign_job_to_me(paint_job);
+            +job_winner(paint_job, second_agent);
+            .print("Assigned paint_job: [paint_table, paint_chair]");
+        } else {
+            // main_agent wins (equal or better)
+            +job_winner(paint_job, main_agent);
+            .print("paint_job assigned to main_agent");
+        };
+    }.
+
+//assign job tasks
++!assign_job_to_me(open_job) <- 
+    +my_job(open_job);
+    +assigned_task(open_door).
+
++!assign_job_to_me(paint_job) <- 
+    +my_job(paint_job);
+    +assigned_task(paint_table);
+    +assigned_task(paint_chair).
+
+//execution
++!execute_assignments : negotiation_complete & my_job(open_job) & my_job(paint_job) <-
+    .print("Executing both jobs");
+    !open(d);
+    !paint(t);
+    !paint(ch).
+
++!execute_assignments : negotiation_complete & my_job(open_job) & not my_job(paint_job) <-
+    .print("Executing open_job only");
+    !open(d).
+
++!execute_assignments : negotiation_complete & my_job(paint_job) & not my_job(open_job) <-
+    .print("Executing paint_job only");
+    !paint(t);
+    !paint(ch).
+
++!execute_assignments : negotiation_complete & not my_job(_) <- 
+    .print("No jobs assigned to me - standing by").
+
++!execute_assignments : not negotiation_complete <- 
+    .print("Waiting for negotiation to complete");
+    .wait(100);
+    !execute_assignments.
