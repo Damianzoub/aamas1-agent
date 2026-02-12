@@ -148,6 +148,18 @@ wall(4,5).
 +!drop_object(cl) : have(cl) <- do(drop(color)).
 
 
+// Try to move ? if blocked, try side-steps 
++!safe_move(Dir) <- do(move(Dir)).
+
+-!safe_move(Dir)[error(action_failed)] <-
+    .print("Blocked on move(",Dir,") ->yielding");
+    !try_dirs([up,down,left,right]).
+
++!try_dirs([]) <- true.
++!try_dirs([D|Rest]) <- do(move(D)).
+-try_dirs([D|Rest])[error(action_failed)] <- !try_dirs(Rest).
+
+
 //Utility predicates for the agent
 // --- ALIASES: map env inventory names -> your short symbols ---
 have(b)  :- have(brush).
@@ -190,7 +202,8 @@ incompatible(O) :- not compatible(O) & have(O).
     DiffDoorY = MyY - DoorY;
     !abs(DiffDoorX, AbsDoorX);
     !abs(DiffDoorY, AbsDoorY);
-    OpenUtil = AbsDoorX + AbsDoorY;
+    DoorDist = AbsDoorX + AbsDoorY;
+    OpenUtil = 100 - DoorDist;
     +job_utility(open_job, OpenUtil);
     
     // Calculate paint_job utility (average manhattan to table and chair)
@@ -206,7 +219,8 @@ incompatible(O) :- not compatible(O) & have(O).
     !abs(DiffChairY, AbsChairY);
     ChairDist = AbsChairX + AbsChairY;
     
-    PaintUtil = (TableDist + ChairDist) / 2;
+    SumPaintDist = (TableDist + ChairDist) / 2;
+    PaintUtil = 200 - SumPaintDist;
     +job_utility(paint_job, PaintUtil);
     
     +utilities_calculated;
@@ -218,11 +232,20 @@ incompatible(O) :- not compatible(O) & have(O).
                           !wait_for_ready.
 
 
+// Convert incoming "tell" messages into beliefs we can use
++!kqml_received(Sender, tell, all_utilities(O,P,Who), _) <-
+    +all_utilities(O,P,Who);
+    .print("Received utilities from ", Sender, ": open=", O, ", paint=", P, ", who=", Who).
+
++!kqml_received(Sender, tell, agent_ready, _) <-
+    +other_ready;
+    .print("Received agent_ready from ", Sender).
+
 +agent_ready <- +other_ready.
 
 +!wait_for_ready : ready & other_ready <- true.
 +!wait_for_ready <- .wait(50); !wait_for_ready.
-
++all_utilities(O,P,Who) <- +all_utilities(O,P,Who).
 // ============================================
 // NEGOTIATION
 // ============================================
@@ -231,7 +254,7 @@ incompatible(O) :- not compatible(O) & have(O).
     ?job_utility(open_job,OpenUtil);
     ?job_utility(paint_job,PaintUtil);
     .my_name(Me);
-    .send(second_agent,tell,all_utilities(OpenUtil,PaintUtil,Me));
+    .send(main_agent,tell,all_utilities(OpenUtil,PaintUtil,Me));
     !wait_for_all_utilities;
     !decide_all_jobs;
     +negotiation_complete;
@@ -246,31 +269,27 @@ incompatible(O) :- not compatible(O) & have(O).
     ?job_utility(paint_job,MyPaintUtil);
     ?all_utilities(OtherOpenUtil,OtherPaintUtil,OtherAgent);
     
-    // main_agent perspective: wins if equal or better (<=)
     
-    // Decide open_job
-    if (OtherOpenUtil >= MyOpenUtil){
-        // My utility <= other's utility means I'm closer or equal
-        !assign_job_to_me(open_job);
-        +job_winner(open_job,main_agent);
-        .print("Assigned open_job: [open_door]");
-    }else{
-        // Other agent is strictly better
-        +job_winner(open_job,second_agent);
-        .print("open_job assigned to second_agent");
-    };
-    
-    // Decide paint_job
-    if (OtherOpenUtil >= MyOpenUtil){
-        // My utility <= other's utility means I'm closer or equal
-        !assign_job_to_me(paint_job);
-        +job_winner(paint_job,main_agent);
-        .print("Assigned paint_job: [paint_table, paint_chair]");
-    }else{
-        // Other agent is strictly better
-        +job_winner(paint_job,second_agent);
-        .print("paint_job assigned to second_agent");
-    }.
+        // Decide open_job
+        if (OtherOpenUtil >= MyOpenUtil) {
+            +job_winner(open_job, main_agent);
+            .print("Assigned open_job: [open_door] to main_agent");
+        } else {
+            !assign_job_to_me(open_job);
+            +job_winner(open_job, second_agent);
+            .print("open_job assigned to second_agent");
+        };
+        
+        // Decide paint_job
+        if (OtherPaintUtil >= MyPaintUtil) {
+            // I'm STRICTLY better (lower distance)
+            +job_winner(paint_job, main_agent);
+            .print("Assigned paint_job: [paint_table, paint_chair] to main_agent");
+        } else {
+            !assign_job_to_me(paint_job);
+            +job_winner(paint_job, second_agent);
+            .print("paint_job assigned to second_agent");
+        }.
 
 //assign job tasks
 +!assign_job_to_me(open_job) <- 
