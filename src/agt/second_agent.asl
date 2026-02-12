@@ -232,6 +232,15 @@ incompatible(O) :- not compatible(O) & have(O).
                           !wait_for_ready.
 
 
+// Convert incoming "tell" messages into beliefs we can use
++!kqml_received(Sender, tell, all_utilities(O,P,Who), _) <-
+    +all_utilities(O,P,Who);
+    .print("Received utilities from ", Sender, ": open=", O, ", paint=", P, ", who=", Who).
+
++!kqml_received(Sender, tell, agent_ready, _) <-
+    +other_ready;
+    .print("Received agent_ready from ", Sender).
+
 +agent_ready <- +other_ready.
 
 +!wait_for_ready : ready & other_ready <- true.
@@ -245,7 +254,7 @@ incompatible(O) :- not compatible(O) & have(O).
     ?job_utility(open_job,OpenUtil);
     ?job_utility(paint_job,PaintUtil);
     .my_name(Me);
-    .send(second_agent,tell,all_utilities(OpenUtil,PaintUtil,Me));
+    .send(main_agent,tell,all_utilities(OpenUtil,PaintUtil,Me));
     !wait_for_all_utilities;
     !decide_all_jobs;
     +negotiation_complete;
@@ -263,24 +272,23 @@ incompatible(O) :- not compatible(O) & have(O).
     
         // Decide open_job
         if (OtherOpenUtil >= MyOpenUtil) {
-            // I'm STRICTLY better (lower distance)
             +job_winner(open_job, main_agent);
-            .print("Assigned open_job: [open_door]");
+            .print("Assigned open_job: [open_door] to main_agent");
         } else {
             !assign_job_to_me(open_job);
             +job_winner(open_job, second_agent);
-            .print("open_job assigned to main_agent");
+            .print("open_job assigned to second_agent");
         };
         
         // Decide paint_job
         if (OtherPaintUtil >= MyPaintUtil) {
             // I'm STRICTLY better (lower distance)
             +job_winner(paint_job, main_agent);
-            .print("Assigned paint_job: [paint_table, paint_chair]");
+            .print("Assigned paint_job: [paint_table, paint_chair] to main_agent");
         } else {
             !assign_job_to_me(paint_job);
             +job_winner(paint_job, second_agent);
-            .print("paint_job assigned to main_agent");
+            .print("paint_job assigned to second_agent");
         }.
 
 //assign job tasks
