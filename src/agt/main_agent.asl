@@ -1,326 +1,348 @@
-grid_size(5,5).
-max_carry(3).
++!start <- .print("Agent started");
+    !calculate_utilities;
+    !negotiate_all_jobs;
+    !execute_assignments;
+    .print("Agent finished").
+!start.
 
-object(t,table). object(ch,chair). object(d,door).
-object(cl,color). object(cd,code). object(b,brush). object(k,key).
+grid_size(5,5).       //5x5 grid
+max_carry(3).          //agent can carry up to 3 objects
 
-needs_to_paint(t, [b, cl]).
-needs_to_paint(ch, [b, cl]).
-needs_to_open(d, [k, cd]).
+//Objects inside the environment
+object(t,table).
+object(ch,chair).
+object(d,door).
+object(cl,color).
+object(cd,code).
+object(b,brush).
+object(k,key).
 
+//Task requirements
+//To paint T or Ch, agent needs B(brush) and Cl(color)
+//To open D, agent needs K(key) and Cd(code)
+needs_to_paint(t ,[b,cl]).
+needs_to_paint(ch, [b,cl]).
+needs_to_open(d, [k,cd]).
+//Initial locations of movable objects
+
+
+//Walls location
+wall(2,2).
+wall(2,1).
+wall(4,4).
+wall(4,5).
+
+//Rewards and Penalties are implemented in the java environment
+//goal of agent
+
+
++!mission <- .print("### MISSION STARTED ###");
+             !achieve_open(d);
+             !achieve_colored(t);
+             !achieve_colored(ch);
+             .print("### MISSION ACCOMPLISHED ###").
+
+//If Obj is already colored, do nothing
++!achieve_colored(t) : colored(table) <- true.
++!achieve_colored(t) : not colored(table) <- !paint(t).
+
+
+//Goal: paint(Obj)
++!paint(t) : needs_to_paint(t, ReqList) <-
+    !collect_all(ReqList);
+    !go_to_obj(t);
+    do(paint(table));
+    +colored(table).
+
++!paint(ch) : needs_to_paint(ch, ReqList) <-
+    !collect_all(ReqList);
+    !go_to_obj(ch);
+    do(paint(chair));
+    +colored(chair);
+    !drop_all. 
+
+//Goal: achieve_open(D)
+//If the door is already open, do nothing
++!achieve_open(_) : door(open) <- true.
++!achieve_open(d) : not door(open) <- !open(d).
++!achieve_colored(ch) : colored(chair) <- true.
++!achieve_colored(ch) : not colored(chair) <- !paint(ch).
+
+//Goal: open(D)
++!open(d)
+: needs_to_open(d, ReqList)        // check required items (key, code)
+<- !collect_all(ReqList);          // collect required items
+   !go_to_obj(d);                  // move to the door's location
+   do(open(door));                   // update belief: door is now 
+   +door(open);
+   !drop_all.
+//Navigation goals for the agent
+
+//Optional high-level move goals (shortcut wrappers)
++!move_up    <- do(move(up)).
++!move_down  <- do(move(down)).
++!move_left  <- do(move(left)).
++!move_right <- do(move(right)).
+
+//Goal: go_to(X,Y)
+//Use path planning (A*) from the current position to (X,Y)
+
+
+//Not there yet -> ask environment to plan a path, then follow that path step by step
++!go_to(X,Y) : pos(CX,CY) & CX == X & CY==Y<- true.
+
++!go_to(X,Y) : pos(CX,CY) & (CX \== X | CY \== Y) <-
+    do(move(X,Y));
+    !go_to(X,Y).
+
+// Follow a path represented as a list of steps
+
++!follow_path([]) <- true.
+
++!follow_path([Dir | Rest]) <- do(move(Dir)); 
+                                !follow_path(Rest).
+
+
+
+//Collect a single object O
++!collect_object(b)  <- do(pick(brush)).
++!collect_object(k)  <- do(pick(key)).
++!collect_object(cd) <- do(pick(code)).
++!collect_object(cl) <- do(pick(color)).
+
++!pick_moving(b) <- !try_pick(b,brush).
++!pick_moving(k) <- !try_pick(k,key).
++!pick_moving(cd) <- !try_pick(cd,code).
++!pick_moving(cl) <- !try_pick(cl,color).
+
++!try_pick(Sym,Real) : at(Sym,X,Y) <- !go_to(X,Y);
+                                      do(pick(Real)).
+
+-!try_pick(Sym,Real)[error(action_failed)] <- !try_pick(Sym,Real).
+
+
+//Collect all objects in a list
++!collect_all([H|T]) : have(H) <- !collect_all(T).
+
++!collect_all([]) <- true.         //empty list: nothing to do
+
++!collect_all([H|T]): not have(H) <- 
+                        !pick_moving(H);
+                        !collect_all(T).         // then collect the rest of the list
+
+//Move to the location of object O                        
++!go_to_obj(O): at(O,X,Y) <- !go_to(X,Y). 
+
+//drop 
++!drop_all <-
+    .findall(O, (have(O) & (O==b | O==k | O==cd | O==cl)), L);
+    !drop_list(L).
+
++!drop_list([]) <- true.
++!drop_list([H|T]) <- !drop_object(H); !drop_list(T).
++!drop_object(O) : not have(O) <- true.
+
++!drop_object(b)  : have(b)  <- do(drop(brush)).
++!drop_object(k)  : have(k)  <- do(drop(key)).
++!drop_object(cd) : have(cd) <- do(drop(code)).
++!drop_object(cl) : have(cl) <- do(drop(color)).
+
+// Try to move ? if blocked, try side-steps 
++!safe_move(Dir) <- do(move(Dir)).
+
+-!safe_move(Dir)[error(action_failed)] <-
+    .print("Blocked on move(",Dir,") ->yielding");
+    !try_dirs([up,down,left,right]).
+
++!try_dirs([]) <- true.
++!try_dirs([D|Rest]) <- do(move(D)).
+-try_dirs([D|Rest])[error(action_failed)] <- !try_dirs(Rest).
+
+//Utility predicates for the agent
+// --- ALIASES: map env inventory names -> your short symbols ---
 have(b)  :- have(brush).
 have(k)  :- have(key).
 have(cd) :- have(code).
 have(cl) :- have(color).
-alias_real(t, table).
-alias_real(ch, chair).
-alias_real(d, door).
-alias_real(k, key).
-alias_real(cd, code).
-alias_real(b, brush).
-alias_real(cl, color).
 
-task_item(open_door, d).
-task_item(paint_table, t).
-task_item(paint_chair, ch).
+//Compute how many objects the agent is currently carrying
+can_carry_more :- max_carry(M) & carrying_count(N) & N < M.
+carrying_count(N) :- .findall(O, have(O), L) & .length(L, N).
+ 
+//Compatible
+compatible(b).
+compatible(cl).
+compatible(k).
+compatible(cd).
+compatible(t).
+compatible(ch).
+compatible(d).
 
-painting_tasks([paint_table, paint_chair]).
+//Incompatible if we carry something that is not declared compatible
+incompatible(O) :- not compatible(O) & have(O).
 
-other_agent(second_agent).
-priority.
++!abs(N,A) : N >= 0 <- A = N.
++!abs(N,A) : N < 0 <- A = -N.
 
-!start.
 
-+!start <-
-    .print("Running Main Agent");
-    !mission.
+// Triggered once at agent initialization
++!calculate_utilities <-
+    // Get current position
+    ?pos(MyX, MyY);
+    
+    // Get object positions
+    ?at(d, DoorX, DoorY);
+    ?at(t, TableX, TableY);
+    ?at(ch, ChairX, ChairY);
+    
+    // Calculate open_job utility (manhattan to door)
+    DiffDoorX = MyX - DoorX;
+    DiffDoorY = MyY - DoorY;
+    !abs(DiffDoorX, AbsDoorX);
+    !abs(DiffDoorY, AbsDoorY);
+    DoorDist = AbsDoorX + AbsDoorY;
+    OpenUtil = 100 - DoorDist;
+    +job_utility(open_job, OpenUtil);
+    
+    // Calculate paint_job utility (average manhattan to table and chair)
+    DiffTableX = MyX - TableX;
+    DiffTableY = MyY - TableY;
+    !abs(DiffTableX, AbsTableX);
+    !abs(DiffTableY, AbsTableY);
+    TableDist = AbsTableX + AbsTableY;
+    
+    DiffChairX = MyX - ChairX;
+    DiffChairY = MyY - ChairY;
+    !abs(DiffChairX, AbsChairX);
+    !abs(DiffChairY, AbsChairY);
+    ChairDist = AbsChairX + AbsChairY;
+    
+    SumPaintDist = (TableDist + ChairDist) / 2;
+    PaintUtil = 200 - SumPaintDist;
+    +job_utility(paint_job, PaintUtil);
+    
+    +utilities_calculated;
+    .print("Utilities calculated: open_job=", OpenUtil, ", paint_job=", PaintUtil).
 
-// ===================== EVENT-DRIVEN MISSION LOGIC =====================
-
-+!mission <-
-    .print("### MISSION STARTED ###");
-    !negotiate_and_claim(open_door);
-
-    if (not painting_assigned_to_other) {
-        !negotiate_and_claim(paint_table)
-    } else {
-        .print("Painting assigned to other agent, my work is done")
-    };
-
-    !drop_all;
-    .print("### MISSION ACCOMPLISHED ###").
-
-// ===================== NEGOTIATION WITH TASK CLAIMING =====================
-
-+!negotiate_and_claim(Task) <-
-    !negotiate(Task, 0);
-    !handle_outcome(Task).
-
-+!handle_outcome(Task) : owner(Task, me) <-
-    .print("I WON ", Task);
-    ?other_agent(OA);
-    .send(OA, tell, taken(Task, me));
-    !execute_task_with_bundling(Task).
-
-+!handle_outcome(Task) : owner(Task, other) <-
-    .print("OTHER AGENT WON ", Task).
-
-+!execute_task_with_bundling(Task) : painting_tasks(PaintList) & .member(Task, PaintList) <-
-    .print("*** EXECUTING BUNDLED PAINTING TASKS ***");
-    ?other_agent(OA);
-    .send(OA, tell, taken(paint_table, me));
-    .send(OA, tell, taken(paint_chair, me));
-    +i_am_painter;
-
-    !do_task(paint_table);
-    .send(OA, tell, done(paint_table));
-
-    !do_task(paint_chair);
-    .send(OA, tell, done(paint_chair));
-
-    .print("*** PAINTING BUNDLE COMPLETED ***").
-
-+!execute_task_with_bundling(Task) : not (painting_tasks(PaintList) & .member(Task, PaintList)) <-
-    .print("*** EXECUTING ", Task, " ***");
-    !do_task(Task);
-    ?other_agent(OA);
-    .send(OA, tell, done(Task)).
-
-// ===================== RECEIVING TASK ASSIGNMENTS =====================
-
-+taken(Task, Agent)[source(Agent)] <-
-    .print("Received: ", Agent, " took ", Task);
-    +owner(Task, other);
-    if (Task == paint_table | Task == paint_chair) {
-        +painting_assigned_to_other;
-        .print("Painting bundle assigned to other agent, I will not negotiate paint tasks")
++!wait_for_other_agent <- .my_name(Me); 
+    if (Me == main_agent){
+        +ready;
+        .send(second_agent,tell,agent_ready);
+        !wait_for_ready;
+    }else{
+        +ready;
+        .send(main_agent,tell,agent_ready);
+        !wait_for_ready;
     }.
 
-+done(Task)[source(Agent)] <-
-    .print("Received: ", Agent, " completed ", Task);
-    +task_completed(Task).
+// Convert incoming "tell" messages into beliefs we can use
++!kqml_received(Sender, tell, all_utilities(O,P,Who), _) <-
+    +all_utilities(O,P,Who);
+    .print("Received utilities from ", Sender, ": open=", O, ", paint=", P, ", who=", Who).
 
-// ===================== NEGOTIATION PROTOCOL =====================
++!kqml_received(Sender, tell, agent_ready, _) <-
+    +other_ready;
+    .print("Received agent_ready from ", Sender).
 
-+!negotiate(Task, N) : owner(Task, other) <-
-    .print("Task ", Task, " already taken by other, skipping negotiation").
++agent_ready <- +other_ready.
++!wait_for_ready <- .wait(50); !wait_for_ready.
++all_utilities(O,P,Who) <- +all_utilities(O,P,Who).
+// Main negotiation coordinator
++!negotiate_all_jobs <-
+    .print("Starting job negotiation");
+    ?job_utility(open_job,OpenUtil);
+    ?job_utility(paint_job,PaintUtil);
+    .my_name(Me);
+    .send(second_agent,tell,all_utilities(OpenUtil,PaintUtil,Me));
+    !wait_for_all_utilities;
+    !decide_all_jobs;
+    +negotiation_complete;
+    .print("Negotiation complete").
 
-+!negotiate(Task, N) : N < 15 <-
-    !compute_utility(Task, U);
-    -+myu(Task, U);
-    -otheru(Task, _); -decided(Task, _);
-    ?other_agent(OA);
-    .send(OA, tell, inform(Task, U));
-    !wait_other_inform(Task);
-    ?otheru(Task, Uo);
-    !decide_proposal(Task, N, U, Uo).
++!wait_for_all_utilities : all_utilities(_,_,_) <- true.
++!wait_for_all_utilities <- .wait(50); !wait_for_all_utilities.
 
-+!negotiate(Task, N) : N >= 15 <-
-    .print("Negotiation timeout for ", Task, ", taking by default");
-    +owner(Task, me).
+//decide all jobs (FIXED LOGIC)
++!decide_all_jobs <-
+    ?job_utility(open_job,MyOpenUtil);
+    ?job_utility(paint_job,MyPaintUtil);
+    ?all_utilities(OtherOpenUtil,OtherPaintUtil,OtherAgent);
+    
 
-+!decide_proposal(Task, N, U, Uo) : should_propose(U, Uo) <-
-    ?other_agent(OA);
-    .send(OA, tell, propose(Task));
-    !wait_decision(Task, N).
+    // HIGHER wins. main_agent wins ties (>=)
+    if (MyOpenUtil >= OtherOpenUtil) {
+        !assign_job_to_me(open_job);
+        +job_winner(open_job, main_agent);
+        .print("open_job assigned to main_agent");
+    } else {
+        +job_winner(open_job, second_agent);
+        .print("open_job assigned to second_agent");
+    };
 
-+!decide_proposal(Task, N, U, Uo) : not should_propose(U, Uo) <-
-    !wait_proposal(Task, N).
+    if (MyPaintUtil >= OtherPaintUtil) {
+        !assign_job_to_me(paint_job);
+        +job_winner(paint_job, main_agent);
+        .print("paint_job assigned to main_agent");
+    } else {
+        +job_winner(paint_job, second_agent);
+        .print("paint_job assigned to second_agent");
+    }.
 
-should_propose(U, Uo) :- U > Uo.
-should_propose(U, Uo) :- U == Uo & priority.
+    
 
-// ===================== WAIT STATES =====================
+//assign job tasks
++!assign_job_to_me(open_job) <- 
+    +my_job(open_job);
+    +assigned_task(open_door).
 
-+!wait_other_inform(Task) : otheru(Task, _) <- true.
-+!wait_other_inform(Task) : owner(Task, other) <-
-    .print("Task ", Task, " taken by other during wait, aborting").
-+!wait_other_inform(Task) <-
++!assign_job_to_me(paint_job) <- 
+    +my_job(paint_job);
+    +assigned_task(paint_table);
+    +assigned_task(paint_chair).
+
+//execution
++!execute_assignments : negotiation_complete & my_job(open_job) & my_job(paint_job) <-
+    .print("Executing both jobs");
+    !open(d);
+    !paint(t);
+    !paint(ch).
+
++!execute_assignments : negotiation_complete & my_job(open_job) & not my_job(paint_job) <-
+    .print("Executing open_job only");
+    !open(d).
+
++!execute_assignments : negotiation_complete & my_job(paint_job) & not my_job(open_job) <-
+    .print("Executing paint_job only");
+    !paint(t);
+    !paint(ch).
+
++!execute_assignments : negotiation_complete & not my_job(_) <- 
+    .print("No jobs assigned to me - standing by").
+
++!execute_assignments : not negotiation_complete <- 
+    .print("Waiting for negotiation to complete");
     .wait(100);
-    !wait_other_inform(Task).
+    !execute_assignments.
 
-+!wait_decision(Task, N) : decided(Task, me) | decided(Task, other) <- true.
-+!wait_decision(Task, N) : owner(Task, other) <-
-    .print("Task ", Task, " taken by other, aborting");
-    +decided(Task, other).
-+!wait_decision(Task, N) : decided(Task, restart) <-
-    -decided(Task, restart);
-    N1 = N + 1;
-    !negotiate(Task, N1).
-+!wait_decision(Task, N) <-
-    .wait(100);
-    !wait_decision(Task, N).
-
-+!wait_proposal(Task, N) : decided(Task, me) | decided(Task, other) <- true.
-+!wait_proposal(Task, N) : owner(Task, other) <-
-    .print("Task ", Task, " taken by other, aborting");
-    +decided(Task, other).
-+!wait_proposal(Task, N) : decided(Task, restart) <-
-    -decided(Task, restart);
-    N1 = N + 1;
-    !negotiate(Task, N1).
-+!wait_proposal(Task, N) <-
-    .wait(100);
-    !wait_proposal(Task, N).
-
-// ===================== MESSAGE HANDLERS =====================
-
-+inform(Task, Uo)[source(Other)] : owner(Task, other) <-
-    .print("Received inform for taken task ", Task, ", sending low utility");
-    .send(Other, tell, inform(Task, -999)).
-
-+inform(Task, Uo)[source(Other)] : myu(Task, _) <-
-    -+otheru(Task, Uo).
-
-+inform(Task, Uo)[source(Other)] : not myu(Task, _) <-
-    -+otheru(Task, Uo);
-    !compute_utility(Task, U);
-    -+myu(Task, U);
-    .send(Other, tell, inform(Task, U)).
-
-+propose(Task)[source(Other)] : owner(Task, other) <-
-    .print("Received proposal for taken task ", Task, ", auto-accepting");
-    .send(Other, tell, accept(Task)).
-
-+propose(Task)[source(Other)] : myu(Task, U) & otheru(Task, Uo) & (Uo > U) <-
-    .send(Other, tell, accept(Task));
-    -+decided(Task, other);
-    -+owner(Task, other).
-
-+propose(Task)[source(Other)] : myu(Task, U) & otheru(Task, Uo) & not (Uo > U) <-
-    .send(Other, tell, reject(Task));
-    -+decided(Task, restart).
-
-+accept(Task)[source(Other)] <-
-    -+decided(Task, me);
-    -+owner(Task, me).
-
-+reject(Task)[source(Other)] <-
-    -+decided(Task, restart).
-
-// ===================== UTILITY & EXECUTION =====================
-
-+!compute_utility(Task, U) <- !my_utility(Task, U).
-
-+!my_utility(Task, U)
-    : task_item(Task, Obj) & at(Obj, TX, TY) & pos(X, Y)
-<-  !manhattan(X, Y, TX, TY, D);
-    U = 100 - D.
-
-+!my_utility(Task, 0).
-
-+!manhattan(X1, Y1, X2, Y2, D) <-
-    DX = X1 - X2; DY = Y1 - Y2;
-    !abs(DX, ADX); !abs(DY, ADY);
-    D = ADX + ADY.
-
-+!abs(N, A) : N >= 0 <- A = N.
-+!abs(N, A) : N < 0 <- A = -N.
-
-// ===================== TASK EXECUTION =====================
-
-+!do_task(open_door)   <- !achieve_open(d).
-+!do_task(paint_table) <- !achieve_colored(t).
-+!do_task(paint_chair) <- !achieve_colored(ch).
-
-
-
-+!achieve_colored(O) : colored(O) <- true.
-+!achieve_colored(O) : not colored(O) <- !paint(O).
-
-// Low-level paint: idempotent + uses needs_to_paint
-+!paint(O) : colored(O) <- true.
-+!paint(O) : not colored(O) & needs_to_paint(O, Req) <- 
-    !collect_all(Req); 
-    !go_to_obj(O);
-    do(paint(O)).      
-
-// Negative plan: log and stop (or limit retries with a counter)
--!paint(O) : colored(O) <- true.
--!paint(O) : not colored(O) <- 
-    .print("Paint failed for ", O, " giving up for now").
-
-
-+!achieve_open(d) : door(open) <- true.
-+!achieve_open(d) : not door(open) <- !open(d).
-
-+!open(d) : door(open) <- true.
-+!open(d) : not door(open) & needs_to_open(d, Req) <-
-    !collect_all(Req);
+// ============================================
+// TASK EXECUTION (same as second_agent)
+// ============================================
++!open(d) : needs_to_open(d, ReqList) <-
+    !collect_all(ReqList);
     !go_to_obj(d);
     do(open(door));
     +door(open);
     !drop_all.
-    
--!open(d) : door(open) <- true.
--!open(d) <-
-    .print("Open failed. Re-trying...").
 
-+!collect_all([]) <- true.
-+!collect_all([H|T]) : have(H) <- !collect_all(T).
-+!collect_all([H|T]) : not have(H) <- !pick_moving(H); !collect_all(T).
++!paint(t) : needs_to_paint(t, ReqList) <-
+    !collect_all(ReqList);
+    !go_to_obj(t);
+    do(paint(table));
+    +colored(table).
 
-// ===================== FIXED PICK (ONE PLAN ONLY) =====================
-
-+!pick_moving(Alias)
-    : alias_real(Alias, RealName)
-<-
-    ?at(Alias, X, Y);
-    !go_to(X, Y);
-    .print("Picking ", RealName, " (alias: ", Alias, ")");
-    do(pick(Alias)).
-
--!pick_moving(Alias) <-
-    .print("Pick failed. Item likely moved. Re-locating...");
-    .wait(200);
-    !pick_moving(Alias).
-
-
-// ===================== FIXED MOVEMENT (GUARDED) =====================
-
-+!go_to_obj(O) : at(O, X, Y) <- !go_to(X, Y).
-
-+!go_to(X, Y) : pos(X, Y) <- true.
-
-+!go_to(X, Y) : pos(CX, CY) & not (CX == X & CY == Y) <-
-    do(move(X, Y));
-    .wait(120);
-    !go_to(X, Y).
-
--!go_to(X, Y) <-
-    .print("Movement failed, retrying go_to(", X, ",", Y, ")");
-    .wait(200);
-    !go_to(X, Y).
-
-// ===================== LEAVE OBJECT CELL (AVOID BLOCKING) =====================
-
-// ===================== LEAVE OBJECT CELL (DOM-safe, no 'true' step) =====================
-
-+!leave_obj(O) : at(O, OX, OY) & pos(OX, OY) & grid_size(W, H) <-
-    // Try four neighbors; each attempt is guarded so it only executes if in-bounds.
-    !try_leave_step(OX, OY,  1, 0, W, H);
-    !try_leave_step(OX, OY, -1, 0, W, H);
-    !try_leave_step(OX, OY,  0, 1, W, H);
-    !try_leave_step(OX, OY,  0,-1, W, H).
-
-+!leave_obj(O) <- .print("leave_obj: not on object or no location; skipping").
-
-+!try_leave_step(OX, OY, DX, DY, W, H)
-    : pos(OX, OY)
-    & NX = OX + DX
-    & NY = OY + DY
-    & NX >= 0 & NX < W
-    & NY >= 0 & NY < H
-<-
-    do(move(NX, NY)).
-
-+!try_leave_step(OX, OY, DX, DY, W, H) <- true.
-
-
-
-// ===================== DROP =====================
-
-+!drop_all <- .findall(O, have(O), L); !drop_list(L).
-+!drop_list([]) <- true.
-+!drop_list([H|T]) <- do(drop(H)); !drop_list(T).
--!drop_list([H|T]) <- !drop_list(T).
++!paint(ch) : needs_to_paint(ch, ReqList) <-
+    !collect_all(ReqList);
+    !go_to_obj(ch);
+    do(paint(chair));
+    +colored(chair);
+    !drop_all.
