@@ -235,6 +235,15 @@ incompatible(O) :- not compatible(O) & have(O).
         !wait_for_ready;
     }.
 
+// Convert incoming "tell" messages into beliefs we can use
++!kqml_received(Sender, tell, all_utilities(O,P,Who), _) <-
+    +all_utilities(O,P,Who);
+    .print("Received utilities from ", Sender, ": open=", O, ", paint=", P, ", who=", Who).
+
++!kqml_received(Sender, tell, agent_ready, _) <-
+    +other_ready;
+    .print("Received agent_ready from ", Sender).
+
 +agent_ready <- +other_ready.
 +!wait_for_ready <- .wait(50); !wait_for_ready.
 +all_utilities(O,P,Who) <- +all_utilities(O,P,Who).
@@ -244,11 +253,7 @@ incompatible(O) :- not compatible(O) & have(O).
     ?job_utility(open_job,OpenUtil);
     ?job_utility(paint_job,PaintUtil);
     .my_name(Me);
-    if (Me == main_agent){
-        .send(second_agent,tell,all_utilities(OpenUtil,PaintUtil,Me));
-    }else{
-        .send(main_agent,tell,all_utilities(OpenUtil,PaintUtil,Me));
-    };
+    .send(second_agent,tell,all_utilities(OpenUtil,PaintUtil,Me));
     !wait_for_all_utilities;
     !decide_all_jobs;
     +negotiation_complete;
@@ -262,7 +267,7 @@ incompatible(O) :- not compatible(O) & have(O).
     ?job_utility(open_job,MyOpenUtil);
     ?job_utility(paint_job,MyPaintUtil);
     ?all_utilities(OtherOpenUtil,OtherPaintUtil,OtherAgent);
-    .my_name(Me);
+    
 
     // HIGHER wins. main_agent wins ties (>=)
     if (MyOpenUtil >= OtherOpenUtil) {
